@@ -1,0 +1,117 @@
+/* Module-owned voice controls; ordinary FormBuilder styles remain separate. */
+.gpt-live-controls {
+	box-sizing: border-box;
+	margin: 0 0 1.5rem;
+	padding: 1rem;
+	border: 1px solid #c8cdd2;
+	border-radius: 0.25rem;
+}
+
+/* Honour hidden state even when a host theme assigns display to buttons/icons. */
+.gpt-live-controls [hidden] {
+	display: none !important;
+}
+
+.gpt-live-controls__description {
+	margin: 0 0 0.75rem;
+}
+
+.gpt-live-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	min-height: 2.75rem;
+	padding: 0.5rem 0.875rem;
+	border: 1px solid #343a40;
+	border-radius: 0.25rem;
+	background: #343a40;
+	color: #fff;
+	font: inherit;
+	cursor: pointer;
+}
+
+.gpt-live-toggle:hover {
+	background: #23272b;
+}
+
+.gpt-live-toggle:focus-visible {
+	outline: 3px solid #6ea8fe;
+	outline-offset: 2px;
+}
+
+.gpt-live-toggle:disabled {
+	cursor: wait;
+	opacity: 0.7;
+}
+
+/* Overlay play/pause icons in one grid cell to avoid shifting the button label. */
+.gpt-live-toggle__icons {
+	display: inline-grid;
+	width: 1rem;
+	height: 1rem;
+	place-items: center;
+}
+
+.gpt-live-toggle__icons > svg {
+	grid-area: 1 / 1;
+	width: 1rem;
+	height: 1rem;
+}
+
+.gpt-live-toggle[aria-pressed="true"] [data-gpt-live-play] {
+	display: none !important;
+}
+
+.gpt-live-toggle[aria-pressed="true"] [data-gpt-live-stop-icon] {
+	display: block !important;
+}
+
+.gpt-live-controls__status {
+	margin: 0.75rem 0 0;
+}
+
+.gpt-live-controls__transcript {
+	margin-top: 0.75rem;
+	padding: 0.75rem;
+	border-left: 3px solid #6c757d;
+	background: #f5f6f7;
+	color: #343a40;
+	white-space: pre-wrap;
+}
+
+/* Pair transcript foreground/background so it remains readable in dark mode. */
+@media (prefers-color-scheme: dark) {
+	.gpt-live-controls__transcript {
+		border-left-color: #adb5bd;
+		background: #212529;
+		color: #f8f9fa;
+	}
+}
+
+.gpt-live-controls__copy {
+	display: inline-grid;
+	width: 2.5rem;
+	height: 2.5rem;
+	margin-top: 0.5rem;
+	padding: 0.5rem;
+	place-items: center;
+	border: 1px solid #6c757d;
+	border-radius: 0.25rem;
+	background: #fff;
+	color: #343a40;
+	cursor: pointer;
+}
+
+.gpt-live-controls__copy:hover {
+	background: #f5f6f7;
+}
+
+.gpt-live-controls__copy:focus-visible {
+	outline: 3px solid #6ea8fe;
+	outline-offset: 2px;
+}
+
+.gpt-live-controls__copy svg {
+	width: 1rem;
+	height: 1rem;
+}
