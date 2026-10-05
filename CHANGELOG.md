@@ -1,12 +1,14 @@
 # Changelog
 
 User-facing module changes are grouped by the version in
-`FormBuilderProcessorGPTLive.info.php`. Dates describe local development; this
-module has not been published as a release.
+`FormBuilderProcessorGPTLive.info.php`. Dates identify release preparation and earlier local development.
 
-## Unreleased
+## 1.16 — 2026-10-05
 
 ### Changed
+
+- Prepare the first non-alpha version, 1.16, following owner-approved sandbox
+  voice testing of cross-page recall, navigation, date clarification and consent.
 
 - Prompt a brief introduction after a successful active-session page change.
   Keep paused sessions silent and respect visitor review requests. Reinforce

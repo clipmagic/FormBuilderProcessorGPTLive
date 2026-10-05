@@ -76,4 +76,4 @@ an individual form. The supplied wording works without editing it.
 - [How it works and Action settings](HOWITWORKS.md)
 - [Version history](CHANGELOG.md)
 
-Current development version: **0.1.15 Alpha**. The module is still in alpha testing.
+Current version: **1.16**.

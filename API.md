@@ -4,7 +4,7 @@ Adds GPT-Live voice input to a ProcessWire FormBuilder form. Spoken answers are
 prepared in supported visible fields; FormBuilder retains validation, saving,
 pagination and submission. Credentials remain on the server.
 
-This reference describes version **0.1.15 Alpha**. See [HOWITWORKS.md](HOWITWORKS.md)
+This reference describes version **1.16**. See [HOWITWORKS.md](HOWITWORKS.md)
 for setup, controls markup and detailed Action settings, or [README.md](README.md)
 for the general overview.
 

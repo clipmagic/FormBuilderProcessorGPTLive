@@ -5,7 +5,7 @@ installation, Action settings and form behaviour in more detail.
 
 For a general introduction and a quick start, see [README.md](README.md).
 For PHP methods and developer integration contracts, see [API.md](API.md).
-Current development version: **0.1.15 Alpha**. Version history is in
+Current version: **1.16**. Version history is in
 [CHANGELOG.md](CHANGELOG.md).
 
 The module reads the enabled form’s supported fields and builds instructions for
