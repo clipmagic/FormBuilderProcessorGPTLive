@@ -19,7 +19,8 @@ unsaved, in-memory forms; it needs no existing form, selected agent or API key.
 It covers conditions, asset URLs, page/submission payload policies, response
 filtering, tokens/limits, message overrides/translations, duplicate endpoint
 execution, uninstall protection, missing-model fallback and native WireHttp request
-contracts with intercepted sends (no provider calls).
+contracts with intercepted sends (no provider calls), plus saved voice selection,
+startup audio configuration, language-scoped accents and arbitrary-language custom preferences.
 
 It does not save forms or entries, uninstall modules or contact OpenAI. Limit
 checks temporarily use uniquely named session/cache records, which are deleted

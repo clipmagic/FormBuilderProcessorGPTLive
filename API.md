@@ -4,7 +4,7 @@ Adds GPT-Live voice input to a ProcessWire FormBuilder form. Spoken answers are
 prepared in supported visible fields; FormBuilder retains validation, saving,
 pagination and submission. Credentials remain on the server.
 
-This reference describes version **1.16**. See [HOWITWORKS.md](HOWITWORKS.md)
+This reference describes version **0.2.0**. See [HOWITWORKS.md](HOWITWORKS.md)
 for setup, controls markup and detailed Action settings, or [README.md](README.md)
 for the general overview.
 
@@ -87,6 +87,9 @@ persistence behaviour. The ordinary `set()` method is not a saved configuration 
 | Setting | Default | Purpose |
 |---------|---------|---------|
 | `agentId` | No selection | Stable AgentTools agent ID. |
+| `voice` | `marin` | Supported built-in GPT-Live voice; unknown values fall back to Marin. Fixed at session startup. |
+| `accent` | Empty (automatic) | Language-specific regional preference, e.g. `en-AU` or `fr-FR`. Applies only when speaking that language; unknown values use automatic pronunciation. `custom` uses the two fields below. |
+| `accentLanguage` / `accentRegion` | Empty | With `accent=custom`, any language name and regional accent name, capped at 100 characters each in the prompt. Blank/incomplete pairs retain automatic pronunciation. |
 | `allowVisitorRequestedSubmission` | Off | Allow submission after explicit visitor permission; available only on the final page. |
 | `jsURL` / `cssURL` | Bundled module assets | Custom browser script/style URLs. |
 | `visitorStartLimit` | `5` | Starts per browser session and form; `0` disables this limit. |

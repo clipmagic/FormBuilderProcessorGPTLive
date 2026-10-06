@@ -5,7 +5,7 @@ installation, Action settings and form behaviour in more detail.
 
 For a general introduction and a quick start, see [README.md](README.md).
 For PHP methods and developer integration contracts, see [API.md](API.md).
-Current version: **1.16**. Version history is in
+Current version: **0.2.0**. Version history is in
 [CHANGELOG.md](CHANGELOG.md).
 
 The module reads the enabled form’s supported fields and builds instructions for
@@ -91,6 +91,8 @@ model selected**.
 | Setting | Default / purpose | When to change it |
 | --- | --- | --- |
 | AgentTools model | Select a compatible OpenAI agent configured in AgentTools. | To use another configured agent/model. |
+| Speaking voice | Marin. Select a built-in GPT-Live voice. | To choose a voice whose tone and regional speaking style suit your audience. |
+| Preferred regional accent | Automatic pronunciation for the spoken language. | Select a preset or Custom for any language and regional accent. |
 | Allow visitors to ask GPT-Live to submit this form | Off. Visitors normally submit the form themselves. | Enable if visitors should be able to confirm submission by voice after review. |
 | Browser script URL/path | The module’s JavaScript file. | For a custom client implementation. |
 | Voice controls stylesheet URL/path | The module’s CSS file. | For a custom stylesheet. |
@@ -371,3 +373,25 @@ language can clarify ambiguous recognition without installing that UI language.
 OpenAI session requests use native WireHttp with a fixed 30-second server timeout,
 one selected transport attempt and no redirects. The separate Action request-timeout
 setting still controls browser requests; it does not change the server timeout.
+
+## Voice and regional accent
+
+The selected voice is sent as `session.audio.output.voice` when the conversation
+starts. It stays fixed even if the visitor changes language. End the conversation
+and start again after changing voice settings.
+
+The accent preference is speaking guidance, not a language restriction. With
+English — Australian selected, GPT-Live is instructed to use that accent only
+while speaking English. When the visitor switches to French, it is instructed to
+use natural French pronunciation. The page language remains initial context and
+clearly spoken visitor language takes precedence.
+
+The presets are conveniences, not a supported-language list. Select **Custom — any language and regional accent** to enter any spoken language and its preferred regional pronunciation. This preference never restricts which language the visitor can speak. If the custom pair is incomplete, automatic pronunciation applies.
+
+Regional voices retain their own influence. Instructions cannot guarantee accent
+fidelity or remove that influence; listen to each voice in the languages your form
+supports. Existing forms retain Marin and automatic pronunciation. No form settings
+need migration.
+
+Voice names and regional descriptions follow the [OpenAI GPT-Live session guide](https://developers.openai.com/api/docs/guides/live-conversations)
+and [session API reference](https://developers.openai.com/api/reference/resources/live/methods/create).

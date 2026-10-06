@@ -3,7 +3,7 @@
 $info = [
 	'title' => __('FormBuilder GPT-Live ', __FILE__),
 	'summary' => __('Add GPT-Live voice input to a FormBuilder form.', __FILE__),
-	'version' => '1.16',
+	'version' => '0.2.0',
 	'author' => 'Clip Magic',
 	'icon' => 'microphone',
 	'autoload' => true,

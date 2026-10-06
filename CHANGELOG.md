@@ -3,6 +3,16 @@
 User-facing module changes are grouped by the version in
 `FormBuilderProcessorGPTLive.info.php`. Dates identify release preparation and earlier local development.
 
+## 0.2.0 — 2026-10-06
+
+- Add per-form speaking voice and language-specific regional accent selectors.
+  Send the selected built-in voice at session startup; keep Marin for existing
+  forms and unknown values. Apply accent guidance only to its selected language
+  and return to natural pronunciation when the conversation changes language.
+  Offer presets plus a custom language/region pair for any language.
+- Include Australian English voices Quartz and Ripple with regional labels.
+  Voice identity remains fixed for the conversation; accent fidelity needs listening tests.
+
 ## 1.16 — 2026-10-05
 
 ### Changed

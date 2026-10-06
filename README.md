@@ -76,4 +76,4 @@ an individual form. The supplied wording works without editing it.
 - [How it works and Action settings](HOWITWORKS.md)
 - [Version history](CHANGELOG.md)
 
-Current version: **1.16**.
+Current version: **0.2.0**.
