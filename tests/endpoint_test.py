@@ -48,6 +48,13 @@ form = matches[0]
 assert 1 <= int(form['data-gpt-live-request-timeout-seconds']) <= 300
 print('PASS Action request timeout exported on rendered form')
 messages = json.loads(form['data-gpt-live-messages'])
+assert form['data-gpt-live-assistant-speaks-first'] in ('0', '1')
+assert messages['welcome'] and messages['welcoming']
+print('PASS speak-first setting and inherited welcome messages exported')
+errors = json.loads(form['data-gpt-live-validation-errors'])
+assert isinstance(errors, list) and len(errors) <= 12
+assert all(isinstance(error, str) and len(error) <= 500 for error in errors)
+print('PASS bounded native validation feedback exported')
 endpoint = urllib.parse.urljoin(options.url, form['data-gpt-live-session-url'])
 # Never send the browser-bound token to an endpoint outside the selected site.
 endpoint_parts = urllib.parse.urlsplit(endpoint)
@@ -67,6 +74,9 @@ for _ in range(7):
     status, body = request(endpoint, {'pageUpdate': True, 'pageNum': page, 'token': token, 'currentValues': {}})
     result = json.loads(body)
     assert status == 200 and 'responses' in result, (status, body[:100])
+    assert isinstance(result.get('assistantGuidance'), str)
+    assert ('page ' + str(page) + ' of') in result['assistantGuidance']
+    assert 'replaces all earlier developer guidance' in result['assistantGuidance']
 print('PASS repeated page refreshes accepted without consuming startup limits')
 status, body = request(endpoint, {'pageUpdate': True, 'pageNum': int(form['data-gpt-live-page-count']) + 1, 'token': token})
 assert status == 400 and json.loads(body)['error'] == messages['fallback']

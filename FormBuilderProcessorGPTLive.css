@@ -70,13 +70,29 @@
 	margin: 0.75rem 0 0;
 }
 
+.gpt-live-controls__status:not(:empty) {
+	min-block-size: 3em;
+}
+
 .gpt-live-controls__transcript {
+	box-sizing: border-box;
+	block-size: 12rem;
+	overflow-y: auto;
+	overflow-wrap: anywhere;
+	overscroll-behavior: contain;
+	overflow-anchor: none;
+	scrollbar-gutter: stable;
 	margin-top: 0.75rem;
 	padding: 0.75rem;
 	border-left: 3px solid #6c757d;
 	background: #f5f6f7;
 	color: #343a40;
 	white-space: pre-wrap;
+}
+
+.gpt-live-controls__transcript:focus-visible {
+	outline: 3px solid #6ea8fe;
+	outline-offset: 2px;
 }
 
 /* Pair transcript foreground/background so it remains readable in dark mode. */

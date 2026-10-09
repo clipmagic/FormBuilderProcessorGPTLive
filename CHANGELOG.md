@@ -3,6 +3,99 @@
 User-facing module changes are grouped by the version in
 `FormBuilderProcessorGPTLive.info.php`. Dates identify release preparation and earlier local development.
 
+## 0.3.0 — 2026-10-09
+
+- Add choiceNoticeThreshold (default 4, range 1–100). Before offering a longer
+  list, explain that visitors can interrupt or choose on screen at any time.
+  Share current native choice counts and dynamic-widget policy with both agents;
+  give the reminder before listing choices and once per question.
+
+- Add a generic gpt-live:manual-entry widget notification. Read the supported
+  visible native value after manual selection rather than accepting event values;
+  update voice context silently while retaining native validation and permissions.
+
+- Use a shared clarification allowance for repeat requests and rejected read-backs.
+  Decide retry versus manual fallback before speaking; prohibit a provisional
+  extra retry followed by fallback in the same turn. Clarify ambiguous compound
+  numbers in digit identifiers without assuming a universal identifier length.
+
+- After manual fallback, accept completion without asking the visitor to speak
+  the typed answer again. Send debounced typing context while a field remains
+  focused, deduplicate blur updates, and keep manual edits silent.
+
+- Add a per-form integer clarification limit (default 1, range 1–5) for every
+  field. Both agents receive a bounded comprehension-retry/manual-entry policy.
+  Visitor edits silently refresh voice context and revoke prior page readiness;
+  fallback waits for the visitor to finish and preserves typed corrections.
+  Attempt counting is conversation policy, not a deterministic browser counter.
+
+- Populate confirmed answers progressively. Strict tool properties accept null
+  for unchanged fields; partial writes return fields_updated and preserve unasked
+  answers. Complete visible page preparation remains separate from partial updates.
+
+- Allow trusted site widgets to delay preparation with the `gpt-live:prepare`
+  browser event and return clarification feedback before any standard field writes.
+  Reject stale session/page completions and retain native validation/submission.
+
+- Stabilize streaming transcript layout with a fixed-height scroll panel reserved
+  at voice startup, stable scrollbar space and a preallocated Copy control.
+  Follow latest text internally only when already at the bottom; preserve earlier
+  reading position and full-history copying. Hide empty output after failed starts.
+
+- Split server responsibilities into explicitly required support traits under
+  `classes/`, retaining the ProcessWire module/hook identity and namespace. Move
+  Messages and Protection to their shorter filenames; keep field/session policies
+  and saved settings intact. Native translation source domains follow the moved
+  files; existing language JSON catalogs need their file/domain paths updated.
+
+- After voice-assisted native page navigation or blocked Next, focus and reveal
+  the replacement form before voice configuration waits. This restores the
+  viewport from a long retained transcript and resumes keyboard entry at the form.
+
+- Support native HTML time and paired date/time using FormBuilder's existing
+  component names. Export native formats, bounds/steps, linked conditions and
+  site clock/timezone; preserve both components in saved context and paging.
+  Guard time without a date, explicit clears and invalid browser sanitization.
+  Keep optional time optional; select mode and colliding names remain manual.
+
+- Omit native checkbox groups with no available choices from the preparation
+  contract: FormBuilder renders no controls for them, so requiring even an empty
+  selection falsely reported failure after other fields had been updated.
+
+- Split voice page-context and developer-guidance appends into ordered UTF-8
+  chunks of at most 480 bytes to avoid the service's 500-token append limit.
+  Preserve complete text, paused-session silence and response ordering.
+
+- Pass bounded native FormBuilder validation errors to voice page context without
+  clearing or duplicating validation. Blocked Next requests a corrective reply,
+  revokes the prior prepared snapshot and stays silent when paused. Navigation
+  owns the next reply when a tool finishes during a page change, avoiding another
+  response request against stale page context. Tighten one-time navigation/waiting
+  guidance; browser preparation does not establish server validation success.
+
+- Add standard native Assistant speaks first Checkbox (default on) and inherited,
+  language-aware Welcome message. Request one opening reply on new-session readiness;
+  never repeat it on Resume or page navigation. Preserve known answers and submission
+  boundaries. Prevent late WebRTC negotiation from overwriting the welcoming status.
+- Correct the opening response event to use `event_id`, not the server-only
+  `client_event_id` rejected by the service. Opening guidance now explicitly
+  summarises retained answers and explains what comes next without waiting for
+  speech, re-requesting populated values or claiming validation/preparation.
+
+- Add the native ProcessWire `getAssistantGuidance` hook for form/page-specific
+  developer instructions. Apply guidance to both agents at startup and after
+  navigation; retire earlier custom guidance on page changes and keep paused
+  sessions silent. Expose supported field/choice schemas and known-answer context
+  without exposing control of validation, tool contracts or submission permissions.
+
+- Add Checkbox, Checkboxes, SelectMultiple, AsmSelect and native choice-based
+  Page reference preparation. Use exact allowed values, arrays for multiple
+  selections, native change events and consent-aware single checkbox handling.
+- Retain multiple selections, corrections and deliberate clears across Back/Next.
+- Capture choices after native render hooks, including routed dynamic options,
+  and bind the server-side schema to the browser/form/page token. Keep FormBuilder
+  responsible for conditions, validation and submission.
+
 ## 0.2.0 — 2026-10-06
 
 - Add per-form speaking voice and language-specific regional accent selectors.

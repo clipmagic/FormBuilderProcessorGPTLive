@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GPT-Live navigation scroll fixture</title>
+<style>
+body{font:16px system-ui;margin:24px}iframe{width:100%;height:480px;border:1px solid #bbb}button,input{font:inherit;padding:8px}#result{padding:12px;background:#eee}header{min-height:400px}
+</style>
+<header><h1>Navigation scroll fixture</h1><p>Local browser check only. No microphone, provider requests or enquiry submission.</p></header>
+<p id="result" role="status">Loading module source…</p>
+<p id="keyboard">Keyboard focus: awaiting navigation</p>
+<iframe title="Form with a long transcript"></iframe>
+<script>
+(async function(){
+ const source=await (await fetch('../FormBuilderProcessorGPTLive.js',{cache:'no-store'})).text();
+ const frame=document.querySelector('iframe');
+ frame.srcdoc='<style>body{font:16px system-ui;margin:16px}form{padding:12px;border:1px solid #bbb}button,input{font:inherit;padding:8px}</style><div id="wrapper"><form><h2>Page one</h2><label>Name <input name="name" value="Fictional visitor"></label><div style="height:600px"></div><button type="button">Next test page</button></form></div><section><h2>Retained conversation</h2><pre></pre></section>';
+ frame.onload=function(){
+  const win=frame.contentWindow,doc=frame.contentDocument;
+  doc.addEventListener('focusin',event=>document.querySelector('#keyboard').textContent='Keyboard focus: '+(event.target.name || event.target.tagName));
+  doc.querySelector('pre').textContent=Array.from({length:120},(_,i)=>'Conversation line '+(i+1)).join('\n');
+  const script=doc.createElement('script');
+  script.textContent=source.replace('let activeSession = null;','let activeSession = null; window.scrollFixture = revealNavigatedForm;');
+  doc.body.append(script);
+  doc.querySelector('button').onclick=function(){
+   doc.querySelector('#wrapper').innerHTML='<form><h2>Page two: Tell us what you need</h2><label>Request <input name="request"></label><p>Conversation retained below the form.</p></form>';
+   const form=doc.querySelector('form');
+   win.scrollFixture(form);
+   const top=form.getBoundingClientRect().top;
+   const outerTop=frame.getBoundingClientRect().top;
+   const pass=doc.activeElement===form && top>=-1 && top<80 && outerTop>=-1 && outerTop<innerHeight;
+   document.querySelector('#result').textContent=(pass?'PASS':'FAIL')+': new form visible; keyboard focus on form; transcript retained ('+doc.querySelector('pre').textContent.split('\n').length+' lines).';
+  };
+  document.querySelector('#result').textContent='Ready. Click Next test page from the lower part of page one.';
+ };
+})().catch(error=>document.querySelector('#result').textContent='FAIL: '+error.message);
+</script>
+</html>

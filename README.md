@@ -51,6 +51,11 @@ site setup and optional settings when you need them.
 Visitors can use voice, type normally, or use both. They can pause and resume the
 assistant and copy the visible conversation.
 
+Answers appear as the conversation progresses. If the assistant has trouble
+understanding an answer, it offers a limited clarification attempt, then asks
+for manual entry. Before longer choice lists, it reminds visitors they can
+interrupt or choose on screen. Both limits are configurable for each form.
+
 By default, visitors submit the form themselves. You can optionally let them ask
 the assistant to submit it. With that option enabled, the assistant asks them to
 review the form and explicitly confirm before sending.
@@ -76,4 +81,4 @@ an individual form. The supplied wording works without editing it.
 - [How it works and Action settings](HOWITWORKS.md)
 - [Version history](CHANGELOG.md)
 
-Current version: **0.2.0**.
+Current version: **0.3.0**.

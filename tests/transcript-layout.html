@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GPT-Live transcript layout fixture</title>
+<style>body{font:16px system-ui;margin:16px}iframe{width:100%;border:1px solid #bbb}button{font:inherit;padding:8px}#result{padding:8px;background:#eee}</style>
+<h1>Transcript layout fixture</h1>
+<p>No microphone, provider calls or enquiry submission. Uses FormBuilder's native iframe resizing.</p>
+<button type="button" id="run" disabled>Stream test transcript</button>
+<p id="result" role="status">Loading…</p>
+<iframe title="Form and voice transcript" class="FormBuilderViewport" id="FormBuilderViewport_fixture"></iframe>
+<script>
+(async function(){
+ const source=await (await fetch('../FormBuilderProcessorGPTLive.js',{cache:'no-store'})).text();
+ const frame=document.querySelector('iframe'),run=document.querySelector('#run'),result=document.querySelector('#result');
+ frame.srcdoc='<link rel="stylesheet" href="../FormBuilderProcessorGPTLive.css"><style>body{font:16px/1.5 system-ui;margin:16px}form{padding:12px;border:1px solid #bbb;margin-bottom:16px}label,input{display:block}input{font:inherit;padding:8px}</style><div id="content"><form class="InputfieldForm" id="FormBuilder_fixture" name="fixture"><h2>Form fields stay in place</h2><label>Request<input name="request" value="Fictional test"></label></form><section class="gpt-live-controls"><button type="button">Pause voice assistant</button><p class="gpt-live-controls__status">Listening. Speak naturally, then pause for the assistant to reply.</p><div class="gpt-live-controls__transcript" data-gpt-live-transcript hidden></div><button class="gpt-live-controls__copy" data-gpt-live-copy type="button" hidden aria-label="Copy conversation">Copy</button></section></div><script src="/wire/modules/Jquery/JqueryCore/JqueryCore.js"><\/script><script src="/site/modules/FormBuilder/form-builder.js"><\/script>';
+ frame.onload=function(){
+  const win=frame.contentWindow,doc=frame.contentDocument,controls=doc.querySelector('.gpt-live-controls');
+  const script=doc.createElement('script');script.textContent=source.replace('let activeSession = null;','let activeSession = null; window.transcriptFixture={resetTranscript,appendTranscript};');doc.body.append(script);
+  run.disabled=false;result.textContent='Ready';
+  run.onclick=async function(){
+   run.disabled=true;result.textContent='Streaming…';
+   win.transcriptFixture.resetTranscript(controls);
+   await new Promise(resolve=>setTimeout(resolve,300));
+   const height=frame.getBoundingClientRect().height,scroll=document.scrollingElement.scrollTop;
+   const position=doc.querySelector('form').getBoundingClientRect().top;
+   for(let i=0;i<100;i++){
+    win.transcriptFixture.appendTranscript(controls,i%2?'You':'Assistant','Test sentence '+i+' with a long addresslikevaluewithoutspacesabcdefghijklmnopqrstuvwxyz.');
+    await new Promise(resolve=>requestAnimationFrame(resolve));
+   }
+   await new Promise(resolve=>setTimeout(resolve,300));
+   const output=doc.querySelector('[data-gpt-live-transcript]');
+   const end=Math.abs(output.scrollHeight-output.clientHeight-output.scrollTop)<2;
+   output.scrollTop=0;win.transcriptFixture.appendTranscript(controls,'Assistant','Final retained sentence');
+   const pass=Math.abs(frame.getBoundingClientRect().height-height)<2 && document.scrollingElement.scrollTop===scroll && doc.querySelector('form').getBoundingClientRect().top===position && end && output.scrollTop===0 && output.textContent.includes('Test sentence 0') && output.textContent.includes('Final retained sentence');
+   result.textContent=(pass?'PASS':'FAIL')+': stable iframe/form/parent scroll; latest text follows internally; reading earlier text stays put; complete history retained.';
+   run.disabled=false;
+  };
+ };
+})().catch(error=>document.querySelector('#result').textContent='FAIL: '+error.message);
+</script>
+</html>

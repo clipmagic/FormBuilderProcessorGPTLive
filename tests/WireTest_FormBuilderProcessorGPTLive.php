@@ -34,7 +34,7 @@ class WireTest_FormBuilderProcessorGPTLive extends WireTest {
             return false;
         });
         try {
-            foreach(['Conditions', 'Assets', 'Schema', 'Protection', 'Translations', 'VoicePreferences', 'Request', 'Uninstall', 'MissingModel', 'HttpTransport'] as $group) {
+            foreach(['Conditions', 'Assets', 'Progressive', 'Clarification', 'ChoiceNotice', 'Schema', 'Choices', 'Datetime', 'AssistantGuidance', 'Welcome', 'ValidationFeedback', 'Protection', 'Translations', 'VoicePreferences', 'Request', 'Uninstall', 'MissingModel', 'HttpTransport'] as $group) {
                 $this->{'test' . $group}();
             }
         } finally {
@@ -56,7 +56,335 @@ class WireTest_FormBuilderProcessorGPTLive extends WireTest {
         }
     }
 
+    private function testProgressive() {
+        $action = wire('modules')->get('FormBuilderProcessorGPTLive');
+        $fields = ['name' => ['type' => 'string'], 'choice' => ['type' => 'string', 'enum' => ['', 'one']], 'multiple' => ['type' => 'array', 'items' => ['type' => 'string', 'enum' => ['one']]]];
+        $payload = (new \ReflectionMethod($action, 'buildSessionPayload'))->invoke($action, $this->newForm(), $fields, [], [], 1, 2, [], 'fixture', 'fixture-model');
+        $tool = $payload['session']['delegation']['responses']['tools'][0];
+        if(!$tool['strict'] || $tool['parameters']['required'] !== array_keys($fields)) throw new \RuntimeException('Strict schema changed');
+        foreach($tool['parameters']['properties'] as $schema) {
+            if(!in_array('null', $schema['type'], true)) throw new \RuntimeException('Unchanged field cannot use null');
+            if(isset($schema['enum']) && !in_array(null, $schema['enum'], true)) throw new \RuntimeException('Choice cannot use null');
+        }
+        if(in_array(null, $tool['parameters']['properties']['multiple']['items']['enum'], true)) throw new \RuntimeException('Null leaked into choice values');
+        foreach([$payload['session']['instructions'], $payload['session']['delegation']['responses']['instructions']] as $policy) {
+            if(!str_contains($policy, 'After each clear answer') || !str_contains($policy, 'fields_updated') || !str_contains($policy, 'explicit optional-field skip')) throw new \RuntimeException('Progressive/skip continuation policy missing');
+        }
+        $this->ok('Strict nullable field updates and both-agent progressive policy');
+    }
+
+    /** Saved limits, native configuration and both-agent fallback policy without provider calls. */
+    private function testClarification() {
+        $action = wire('modules')->get('FormBuilderProcessorGPTLive');
+        $form = $this->newForm();
+        $action->fbForm($form);
+        $limit = new \ReflectionMethod($action, 'clarificationLimit');
+        foreach([[[], 1], [['clarificationLimit' => 2], 2], [['clarificationLimit' => '3'], 3], [['clarificationLimit' => 5], 5]] as [$settings, $expected]) {
+            if($limit->invoke($action, $settings) !== $expected) throw new \RuntimeException('Clarification normalization failed');
+            $form->set('FormBuilderProcessorGPTLive', $settings);
+            $inputs = wire('modules')->get('InputfieldWrapper');
+            $action->getConfigInputfields($inputs);
+            $input = $inputs->getChildByName('clarificationLimit');
+            if(!$input instanceof InputfieldInteger || (int) $input->value !== $expected || (int) $input->min !== 1 || (int) $input->max !== 5) throw new \RuntimeException('Native clarification input failed');
+            foreach(['type="number"', 'min="1"', 'max="5"', 'step="1"'] as $attribute) {
+                if(!str_contains($input->render(), $attribute)) throw new \RuntimeException('Rendered clarification input missing: ' . $attribute);
+            }
+            foreach([1, 2, 1] as $page) {
+                $payload = (new \ReflectionMethod($action, 'buildSessionPayload'))->invoke($action, $form, ['phone' => ['type' => 'string']], ['phone' => 'Phone'], [], $page, 2, $settings, 'fixture', 'fixture-model');
+                foreach([$payload['session']['instructions'], $payload['session']['delegation']['responses']['instructions']] as $policy) {
+                    if(!str_contains($policy, 'never ask them to say, spell or confirm the manually entered value again') || !str_contains($policy, 'returning null in partial tool updates')) throw new \RuntimeException('Manual completion re-asks or overwrites typed answers');
+                    foreach(['Both kinds consume the same allowance', 'do not first ask for another spoken attempt', 'do not speak a provisional retry question', 'do not silently convert it', 'Ordinary quantities may legitimately be compound numbers'] as $text) {
+                        if(!str_contains($policy, $text)) throw new \RuntimeException('Retry decision/identifier ambiguity policy missing: ' . $text);
+                    }
+                    foreach(['Allow at most ' . $expected . ' clarification attempts per field', 'type or select the correct value', 'wait for the visitor to say they have finished', 'Back/Next and Pause/Resume', 'Normal questions needed to complete an answer', 'replace the entire earlier candidate', 'required-field skip'] as $text) {
+                        if(!str_contains($policy, $text)) throw new \RuntimeException('Fallback policy missing: ' . $text);
+                    }
+                }
+            }
+        }
+        foreach([0, 6, -1, true, 1.5, '2.0', 'bad', [], null] as $invalid) {
+            if($limit->invoke($action, ['clarificationLimit' => $invalid]) !== 1) throw new \RuntimeException('Invalid limit did not use default');
+        }
+        $this->ok('Clarification integer/default/bounds and both-agent manual fallback across pages');
+    }
+
+    /** Long-list threshold boundary, native setting and both-agent page policies. */
+    private function testChoiceNotice() {
+        $action = wire('modules')->get('FormBuilderProcessorGPTLive');
+        $form = $this->newForm();
+        $action->fbForm($form);
+        $fields = [
+            'four' => ['type' => 'string', 'enum' => ['', 'a', 'b', 'c', 'd']],
+            'five' => ['type' => 'array', 'items' => ['type' => 'string', 'enum' => ['a', 'b', 'c', 'd', 'e']]],
+        ];
+        $read = new \ReflectionMethod($action, 'choiceNoticeThreshold');
+        foreach([[[], 4], [['choiceNoticeThreshold' => '6'], 6], [['choiceNoticeThreshold' => 1], 1], [['choiceNoticeThreshold' => 100], 100]] as [$settings, $expected]) {
+            if($read->invoke($action, $settings) !== $expected) throw new \RuntimeException('Choice threshold normalization failed');
+            $form->set('FormBuilderProcessorGPTLive', $settings);
+            $inputs = wire('modules')->get('InputfieldWrapper');
+            $action->getConfigInputfields($inputs);
+            $input = $inputs->getChildByName('choiceNoticeThreshold');
+            if(!$input instanceof InputfieldInteger || (int) $input->value !== $expected) throw new \RuntimeException('Choice threshold native input failed');
+            foreach(['type="number"', 'min="1"', 'max="100"', 'step="1"'] as $attribute) if(!str_contains($input->render(), $attribute)) throw new \RuntimeException('Choice threshold rendering failed');
+            foreach([1, 2, 1] as $page) {
+                $payload = (new \ReflectionMethod($action, 'buildSessionPayload'))->invoke($action, $form, $fields, [], [], $page, 2, $settings, 'fixture', 'fixture-model');
+                foreach([$payload['session']['instructions'], $payload['session']['delegation']['responses']['instructions']] as $policy) {
+                    foreach(['more than ' . $expected . ' available choices', 'before the first choice', 'dynamically returned widget suggestions', 'select it on screen yourself at any time', 'once for each choice question'] as $text) if(!str_contains($policy, $text)) throw new \RuntimeException('Long-list policy missing: ' . $text);
+                }
+            }
+        }
+        $build = new \ReflectionMethod($action, 'buildChoiceNoticeInstructions');
+        $policy = $build->invoke($action, [], $fields);
+        if(!str_contains($policy, '{"five":5}') || str_contains($policy, '"four":')) throw new \RuntimeException('Threshold equality/placeholder count failed');
+        if(!str_contains($build->invoke($action, ['choiceNoticeThreshold' => 6], $fields), 'data not instructions): {}')) throw new \RuntimeException('Saved threshold ignored');
+        foreach([0, -1, 101, true, 2.5, '4.0', [], null] as $invalid) if($read->invoke($action, ['choiceNoticeThreshold' => $invalid]) !== 4) throw new \RuntimeException('Invalid choice threshold did not use default');
+        $this->ok('Choice reminder default/custom limits, strict greater-than, native rendering and both agents across pages');
+    }
+
+    /** Native hooks fine-tune both agents without changing fields or submission tools. */
+    private function testAssistantGuidance() {
+        $action = wire('modules')->get('FormBuilderProcessorGPTLive');
+        $form = $this->newForm();
+        $action->fbForm($form);
+        $fields = ['destination' => ['type' => 'string', 'description' => 'Optional destination']];
+        $labels = ['destination' => 'Destination'];
+        $known = [['name' => 'pickup', 'label' => 'Pickup', 'value' => 'Fixture address']];
+        $read = new \ReflectionMethod($action, 'pageAssistantGuidance');
+        $build = new \ReflectionMethod($action, 'buildSessionPayload');
+        $this->check('No hook leaves guidance empty', '', $read->invoke($action, $form, 1, 3, $fields, $labels, $known));
+        $baseline = $build->invoke($action, $form, $fields, $labels, $known, 1, 3, [], 'fixture-offer', 'fixture-model');
+        $this->check('Empty guidance leaves both payloads unchanged', $baseline, $build->invoke($action, $form, $fields, $labels, $known, 1, 3, [], 'fixture-offer', 'fixture-model', ''));
+        $seen = [];
+        $hook = wire()->addHookAfter('FormBuilderProcessorGPTLive::getAssistantGuidance', function($event) use(&$seen) {
+            $context = $event->arguments(0);
+            $seen[] = $context;
+            if($context['formName'] !== 'gptlive_fixture') return;
+            $event->return = $context['pageNum'] === 3 ? '' : 'Fixture page ' . $context['pageNum'] . ': reuse previously confirmed destinations.';
+        });
+        try {
+            foreach([1, 2, 3, 1] as $page) {
+                $guidance = $read->invoke($action, $form, $page, 3, $fields, $labels, $known);
+                $expected = $page === 3 ? '' : 'Fixture page ' . $page . ': reuse previously confirmed destinations.';
+                $this->check('Hook refreshes with current page including Back', $expected, $guidance);
+                $payload = $build->invoke($action, $form, $fields, $labels, $known, $page, 3, [], 'fixture-offer', 'fixture-model', $guidance);
+                foreach([$payload['session']['instructions'], $payload['session']['delegation']['responses']['instructions']] as $instructions) {
+                    if($expected !== '' && !str_contains($instructions, $expected)) throw new \RuntimeException('Hook guidance missing from an agent');
+                    if(!str_contains($instructions, 'Never')) throw new \RuntimeException('Core policy removed');
+                }
+                $this->check('Guidance does not change tool contract', $baseline['session']['delegation']['responses']['tools'], $payload['session']['delegation']['responses']['tools']);
+            }
+            $this->check('Hook context contains field schemas', $fields, $seen[0]['fields']);
+            $this->check('Hook context contains labels', $labels, $seen[0]['fieldLabels']);
+            $this->check('Hook context contains known answers', $known, $seen[0]['knownValues']);
+            $other = $this->newForm();
+            $other->name = 'gptlive_other';
+            $action->fbForm($other);
+            $this->check('Hook does not affect other forms', '', $read->invoke($action, $other, 1, 1, [], [], []));
+        } finally {
+            wire()->removeHook($hook);
+            $action->fbForm($form);
+        }
+        foreach([['invalid'], str_repeat('x', 8001)] as $invalid) {
+            $hook = wire()->addHookAfter('FormBuilderProcessorGPTLive::getAssistantGuidance', static function($event) use($invalid) { $event->return = $invalid; });
+            try {
+                $rejected = false;
+                try { $read->invoke($action, $form, 1, 3, $fields, $labels, $known); }
+                catch(WireException $error) { $rejected = true; }
+                $this->check('Invalid guidance rejected before provider transport', true, $rejected);
+            } finally {
+                wire()->removeHook($hook);
+            }
+        }
+        $this->ok('Assistant guidance: native hooks, form/page isolation, both agents, unchanged tools and invalid returns');
+    }
+
+    /** Native date/time contracts use unsaved fields and native rendered controls. */
+    private function testDatetime() {
+        $action = wire('modules')->get('FormBuilderProcessorGPTLive');
+        $form = $this->newForm();
+        foreach(['date', 'time', 'datetime'] as $mode) {
+            $field = $form->addField($mode, 'Datetime', ucfirst($mode));
+            $field->inputType = 'html';
+            $field->htmlType = $mode;
+            $field->dateMin = '2026-10-01';
+            $field->dateMax = '2027-12-31';
+            $field->timeMin = '08:00';
+            $field->timeMax = '18:00';
+            $field->timeStep = $mode === 'time' ? 1 : 900;
+        }
+        $form->get('datetime')->required = 1;
+        $form->get('datetime')->requiredIf = 'date!=2026-10-01';
+        $form->get('datetime')->showIf = 'date!=';
+        $select = $form->addField('select_date', 'Datetime', 'Select date');
+        $select->inputType = 'select';
+        $action->fbForm($form);
+        $action->form(wire('modules')->get('InputfieldForm'));
+        $schema = new \ReflectionMethod($action, 'getToolFields');
+        $fields = $schema->invoke($action, $form, 1);
+        $this->check('Native controls use flat native keys', ['date', 'time', 'datetime', 'datetime__time'], array_keys($fields));
+        foreach(['HH:MM:SS', '08:00', '18:00', '1 seconds'] as $text) $this->check('Time description: ' . $text, true, str_contains($fields['time']['description'], $text));
+        foreach(['YYYY-MM-DD', '2026-10-01', '2027-12-31'] as $text) $this->check('Date description: ' . $text, true, str_contains($fields['date']['description'], $text));
+        $this->check('Paired time schema linked', true, str_contains($fields['datetime__time']['description'], 'date field datetime'));
+        $labels = (new \ReflectionMethod($action, 'getToolFieldLabels'))->invoke($action, $form, $fields);
+        $this->check('Paired time labelled', 'Datetime (time)', $labels['datetime__time']);
+        $rules = (new \ReflectionMethod($action, 'getToolFieldRules'))->invoke($action, $form, $fields);
+        $this->check('Pair metadata linked both directions', ['datetime__time', 'datetime'], [$rules['datetime']['timeField'], $rules['datetime__time']['dateField']]);
+        $this->check('RequiredIf belongs to date only', ['date!=2026-10-01', ''], [$rules['datetime']['requiredIf'], $rules['datetime__time']['requiredIf']]);
+        $this->check('Both components share visibility', $rules['datetime']['showIf'], $rules['datetime__time']['showIf']);
+        $processor = $form->processor();
+        $action->processor($processor);
+        $processor->setEntry(['datetime' => strtotime('2026-11-04 14:30'), 'time' => strtotime('2026-11-04 12:13:14')]);
+        $read = new \ReflectionMethod($action, 'getKnownFormValues');
+        $known = $read->invoke($action, $form, 1, $fields, $fields, ['date' => '2026-11-04']);
+        $values = array_column($known, 'value', 'name');
+        $this->check('Saved timestamp exposes both browser components', ['2026-11-04', '14:30', '12:13:14'], [$values['datetime'], $values['datetime__time'], $values['time']]);
+        $cleared = $read->invoke($action, $form, 1, $fields, $fields, ['date' => '2026-11-04', 'datetime' => '', 'datetime__time' => '']);
+        $this->check('Browser explicit blank overrides saved pair', false, isset(array_column($cleared, 'value', 'name')['datetime__time']));
+        $input = $form->get('datetime')->getInputfield();
+        $input->attr('value', strtotime('2026-11-04 14:30'));
+        $html = $input->render();
+        foreach(['type="date"', 'type="time"', 'name="datetime__time"', 'value="2026-11-04"', 'value="14:30"'] as $text) $this->check('Native render: ' . $text, true, str_contains($html, $text));
+        $payload = (new \ReflectionMethod($action, 'buildSessionPayload'))->invoke($action, $form, $fields, $labels, $known, 1, 1, [], 'fixture', 'fixture-model');
+        foreach([$payload['session']['instructions'], $payload['session']['delegation']['responses']['instructions']] as $instructions) {
+            $this->check('Both agents preserve paired corrections', true, str_contains($instructions, 'on a time-only correction preserve the date'));
+        }
+        $this->check('Voice receives current site timezone', true, str_contains($payload['session']['instructions'], date_default_timezone_get()));
+        $form->addField('datetime__time', 'Text', 'Collision');
+        $collision = $schema->invoke($action, $form, 1);
+        $this->check('Ambiguous control names kept manual', false, isset($collision['datetime']) || isset($collision['datetime__time']));
+        $this->ok('Datetime: native formats, bounds, linked pair, optional time, saved context, clear and collision safety');
+    }
+
+    /** Native field contracts, including choices populated only at render time. */
+    private function testChoices() {
+        $action = wire('modules')->get('FormBuilderProcessorGPTLive');
+        $form = $this->newForm();
+        $native = wire('modules')->get('InputfieldForm');
+        foreach(['Checkbox', 'Checkboxes', 'SelectMultiple', 'AsmSelect', 'Select', 'Radios'] as $type) {
+            $name = strtolower($type);
+            $field = $form->addField($name, $type, $type);
+            $input = $field->getInputfield();
+            if($type === 'Checkbox') $input->checkedValue = 'agree';
+            else $input->addOptions(['airport' => 'Airport', 'cruise' => 'Cruise']);
+            $native->add($input);
+        }
+        // Page delegates to real native widgets, supplied in-memory, without creating pages.
+        foreach(['InputfieldSelect', 'InputfieldCheckboxes', 'InputfieldSelectMultiple', 'InputfieldAsmSelect', 'InputfieldRadios'] as $widgetClass) {
+            $name = 'page_' . strtolower(substr($widgetClass, 10));
+            $field = $form->addField($name, 'Page', $name);
+            $input = $field->getInputfield();
+            $input->inputfield = $widgetClass;
+            $widget = wire('modules')->get($widgetClass);
+            $widget->addOptions([101 => 'Page one', 202 => 'Page two']);
+            (new \ReflectionProperty($input, 'inputfieldWidget'))->setValue($input, $widget);
+            $native->add($input);
+        }
+        $action->fbForm($form);
+        $action->form($native);
+        $form->addField('empty_choices', 'Checkboxes', 'No available choices');
+        $native->add($form->get('empty_choices')->getInputfield());
+        $fields = (new \ReflectionMethod($action, 'getToolFields'))->invoke($action, $form, 1);
+        $this->check('Empty native checkbox group omitted from preparation contract', false, isset($fields['empty_choices']));
+        $this->check('Single checkbox exact checked value', ['0', 'agree'], $fields['checkbox']['enum']);
+        foreach(['checkboxes', 'selectmultiple', 'asmselect', 'page_checkboxes', 'page_selectmultiple', 'page_asmselect'] as $name) {
+            $this->check('Multiple native choice uses array: ' . $name, 'array', $fields[$name]['type']);
+            $this->check('Rendered choices: ' . $name, str_starts_with($name, 'page_') ? ['101','202'] : ['airport','cruise'], $fields[$name]['items']['enum']);
+        }
+        foreach(['page_select', 'page_radios'] as $name) {
+            $this->check('Page single uses exact IDs', ['','101','202'], $fields[$name]['enum']);
+        }
+        $name = 'gptlive_choices_' . bin2hex(random_bytes(8));
+        $this->temporaryNames[] = $name;
+        $contract = ['pageNum' => 1, 'fields' => $fields];
+        $token = (new \ReflectionMethod($action, 'issueFormToken'))->invoke($action, $name, $contract);
+        $this->check('Rendered contract stored server-side', $contract, (new \ReflectionMethod($action, 'formTokenContract'))->invoke($action, $name, $token));
+        $this->check('Other form cannot reuse choices', null, (new \ReflectionMethod($action, 'formTokenContract'))->invoke($action, 'other', $token));
+        $probe = new class extends FormBuilderProcessorGPTLive {
+            public $refreshes = 0;
+            public function renderReady() { $this->refreshes++; }
+        };
+        wire($probe);
+        $processor = $form->processor();
+        $probe->processor($processor);
+        $event = new HookEvent();
+        $event->object = $processor;
+        $event->arguments = [$native, FormBuilderMaker::submitTypeNone];
+        $probe->refreshRenderedChoices($event);
+        $this->check('Render refresh accepts native false submit type', 1, $probe->refreshes);
+        $event->arguments = [$native, FormBuilderMaker::submitTypeNext];
+        $probe->refreshRenderedChoices($event);
+        $this->check('Input processing does not refresh render token', 1, $probe->refreshes);
+        $this->ok('Five new choice types and bounded Page delegates use native rendered options');
+    }
+
     /** Voice payloads and language-scoped accents; no provider connection. */
+    private function testValidationFeedback() {
+        $action = wire('modules')->get('FormBuilderProcessorGPTLive');
+        $native = wire('modules')->get('InputfieldForm');
+        $field = wire('modules')->get('InputfieldText');
+        $field->name = 'gptlive_validation_fixture';
+        $field->label = 'Contact';
+        $native->add($field);
+        $read = new \ReflectionMethod($action, 'nativeValidationErrors');
+        try {
+            $field->error('Please enter an email address or phone number.');
+            $before = $native->getErrors(false);
+            $errors = $read->invoke($action, $native);
+            $this->check('Native error forwarded without site-specific implementation', true, str_contains(implode(' ', $errors), 'Please enter an email address or phone number.'));
+            $this->check('Reading feedback does not clear native validation', $before, $native->getErrors(false));
+            $native->getErrors(true);
+            $this->check('Fresh error-free form resets feedback', [], $read->invoke($action, $native));
+            $native = wire('modules')->get('InputfieldForm');
+            $field = wire('modules')->get('InputfieldText');
+            $field->name = 'gptlive_validation_bounds_fixture';
+            $native->add($field);
+            for($i = 0; $i < 20; $i++) $field->error($i . str_repeat('x', 1000));
+            $errors = $read->invoke($action, $native);
+            $this->check('Native feedback count bounded', 12, count($errors));
+            $this->check('Native feedback message bounded', 500, strlen($errors[0]));
+        } finally {
+            $native->getErrors(true);
+            $field->getErrors(true);
+        }
+    }
+
+    private function testWelcome() {
+        $action = wire('modules')->get('FormBuilderProcessorGPTLive');
+        $form = $this->newForm();
+        $action->fbForm($form);
+        $build = new \ReflectionMethod($action, 'buildSessionPayload');
+        foreach([[], ['assistantSpeaksFirst' => 0], ['assistantSpeaksFirst' => 1, 'message_welcome' => 'Welcome "friend" </script>'], ['message_welcome' => '']] as $settings) {
+            $form->set($action->className(), $settings);
+            $enabled = !array_key_exists('assistantSpeaksFirst', $settings) || !empty($settings['assistantSpeaksFirst']);
+            $wrapper = wire('modules')->get('InputfieldWrapper');
+            $action->getConfigInputfields($wrapper);
+            $checkbox = $wrapper->getChildByName('assistantSpeaksFirst');
+            $this->check('Speak-first uses standard checkbox', true, $checkbox instanceof InputfieldCheckbox);
+            $this->check('Speak-first default and explicit opt-out', $enabled, (bool) $checkbox->attr('checked'));
+            $welcome = $action->getVoiceMessages()['welcome'];
+            $this->check('Welcome blank inheritance', trim($settings['message_welcome'] ?? '') ?: 'Hello, I can help you complete this form.', $welcome);
+            $request = $build->invoke($action, $form, [], [], [], 1, 1, $settings, 'fixture-offer', 'fixture-model');
+            $this->check('Greeting policy only when enabled', $enabled, str_contains($request['session']['instructions'], 'At the start of a new conversation only'));
+            $this->check('Greeting does not change delegated tools', false, str_contains($request['session']['delegation']['responses']['instructions'], 'At the start of a new conversation only'));
+            if($enabled) $this->check('Greeting wording is JSON quoted', true, str_contains($request['session']['instructions'], json_encode($welcome, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE)));
+        }
+        $form->set($action->className(), []);
+        $field = new FormBuilderField;
+        $field->name = 'postcode';
+        $field->label = 'Postcode';
+        $field->type = 'Text';
+        $form->add($field);
+        $fields = ['postcode' => ['type' => 'string', 'description' => 'Postcode']];
+        $known = (new \ReflectionMethod($action, 'getKnownFormValues'))->invoke($action, $form, 1, $fields, $fields, ['postcode' => '2570']);
+        $request = $build->invoke($action, $form, $fields, ['postcode' => 'Postcode'], $known, 1, 3, [], 'fixture-offer', 'fixture-model');
+        $instructions = $request['session']['instructions'];
+        $this->check('Rendered existing postcode reaches opening context', true, str_contains($instructions, '"value":"2570"'));
+        foreach(['Begin speaking without waiting', 'briefly summarise', 'already entered, not newly saved', 'Do not request a populated value again', 'Do not invent progress or values on later pages'] as $policy) {
+            $this->check('Populated opening policy: ' . $policy, true, str_contains($instructions, $policy));
+        }
+        $this->check('Populated opening has no submission tool', 1, count($request['session']['delegation']['responses']['tools']));
+    }
+
     private function testVoicePreferences() {
         $action = wire('modules')->get('FormBuilderProcessorGPTLive');
         $form = $this->newForm();
@@ -229,7 +557,7 @@ class WireTest_FormBuilderProcessorGPTLive extends WireTest {
 		 // Existing answers must reach the voice agent for every supported page.
 		 if($supported) {
 		  $context = ' ' . (new \ReflectionMethod($module, 'buildPageContextInstructions'))->invoke($module, $labels, $known);
-		  if(substr($request['session']['instructions'], -strlen($context)) !== $context) throw new \RuntimeException('Voice startup did not receive existing answers');
+		  if(!str_contains($request['session']['instructions'], $context)) throw new \RuntimeException('Voice startup did not receive existing answers');
 		 }
 		 $review = (new \ReflectionMethod($module, 'buildPageReviewInstructions'))->invoke($module, $form, $page, $pages, $supported, $submit && $page === $pages && $supported);
 		 if(!str_contains($request['session']['instructions'], $review)) throw new \RuntimeException('Voice startup did not receive current-page navigation/submission policy');
@@ -246,7 +574,7 @@ class WireTest_FormBuilderProcessorGPTLive extends WireTest {
 		 if($supported) $this->check('Preparation tool uses fixture name', 'prepare_gptlive_fixture', $responses['tools'][0]['name']);
 		 if($expectedTools === 2) $this->check('Submission tool uses fixture name', 'submit_gptlive_fixture', $responses['tools'][1]['name']);
 		}
-		
+
 		// Service response handling still returns only SDP or the Action fallback.
 		$module->fbForm($form);
 		$parser = new \ReflectionMethod($module, 'parseLiveSessionResponse');
@@ -258,7 +586,9 @@ class WireTest_FormBuilderProcessorGPTLive extends WireTest {
 		try {
 		    foreach([[false, 0, 'test transport error'], ['not JSON', 200, ''], [json_encode(['error' => ['message' => 'private service detail']]), 400, ''], [json_encode(['session' => ['private' => 'value']]), 200, '']] as [$body, $status, $error]) {
 		        $reply = json_decode($parser->invoke($module, 'gptlive_fixture', $body, $status, $error), true);
-		        if($reply !== ['error' => $module->getVoiceMessages()['fallback']]) throw new \RuntimeException('Service failure no longer uses the Action fallback');
+		        $expectedReply = ['error' => $module->getVoiceMessages()['fallback']];
+		        if($status === 400) $expectedReply['manualOnly'] = false;
+		        if($reply !== $expectedReply) throw new \RuntimeException('Service failure no longer uses the Action fallback');
 		    }
 		    $body = json_encode(['transport' => ['sdp' => "answer\r\n"], 'session' => ['private' => 'value']]);
 		    $reply = json_decode($parser->invoke($module, 'gptlive_fixture', $body, 201, ''), true);
@@ -317,8 +647,8 @@ class WireTest_FormBuilderProcessorGPTLive extends WireTest {
 		$form->set($ns, ['message_starting' => 'Shared start', 'message_startingSession' => 'Old start']);
 		$assert($module->getVoiceMessages()['starting'] === 'Shared start', 'shared message takes precedence');
 		$assert(!isset($module->getVoiceMessages()['startingSession']), 'browser catalog contains shared keys only');
-		
-		
+
+
 		// LanguageSupport is optional; exercise resolution without installing it or saving a user.
 		$originalLanguage = wire('user')->language;
 		$language = new WireData();
@@ -336,7 +666,7 @@ class WireTest_FormBuilderProcessorGPTLive extends WireTest {
 		$assert($call('recentStarts', [100, 101, 200, '200'], 200, 100) === [101, 200], 'rolling boundary excludes expired and malformed timestamps');
 		$form->set($ns, ['visitorStartLimit' => 0, 'ipStartLimit' => 0]);
 		$assert($call('reserveVoiceStart', $form->name) && $call('reserveVoiceStart', $form->name), 'explicit zero disables limits');
-		
+
 		// Reproduce the owner's 1 / 1 / 1 settings with expired visitor and IP starts.
 		$form->set($ns, ['visitorStartLimit' => 1, 'ipStartLimit' => 1, 'startWindowMinutes' => 1]);
 		wire('session')->setFor($ns, 'starts_' . $form->name, [time() - 61]);
@@ -347,7 +677,7 @@ class WireTest_FormBuilderProcessorGPTLive extends WireTest {
 		} finally {
 		    wire('cache')->delete($cacheKey);
 		}
-		
+
 		$assert((bool) $fields->getChildByName('requestTimeoutSeconds'), 'Action exposes request timeout');
 		foreach([[[], 30], [['requestTimeoutSeconds' => 7], 7], [['requestTimeoutSeconds' => 0], 1], [['requestTimeoutSeconds' => 999], 300]] as [$settings, $expected]) {
 		    $form->set($ns, $settings);
@@ -363,14 +693,14 @@ class WireTest_FormBuilderProcessorGPTLive extends WireTest {
 		$form = $this->newForm();
 		$form->set($module->className(), []);
 		$module->fbForm($form);
-		$file = wire('config')->paths->siteModules . 'FormBuilderProcessorGPTLive/FormBuilderProcessorGPTLiveMessages.php';
+		$file = wire('config')->paths->siteModules . 'FormBuilderProcessorGPTLive/classes/Messages.php';
 		$defaults = (new \ReflectionMethod($module, 'defaultMessages'))->invoke($module);
 		$labels = (new \ReflectionMethod($module, 'defaultMessageLabels'))->invoke($module);
 		$parser = (new \ReflectionClass(LanguageParser::class))->newInstanceWithoutConstructor();
 		$matches = (new \ReflectionMethod($parser, 'parseFile'))->invoke($parser, $file);
 		$found = $matches[2][3];
 		$this->check('Native scanner discovers defaults and labels', true, count($found) >= count($defaults) + count($labels));
-		
+
 		// Use ProcessWire's translator and native __() lookup without a persisted Language page.
 		$translator = (new \ReflectionClass(LanguageTranslator::class))->newInstanceWithoutConstructor();
 		$translator->wire(wire());
@@ -378,6 +708,8 @@ class WireTest_FormBuilderProcessorGPTLive extends WireTest {
 		$domain = $translator->filenameToTextdomain($file);
 		foreach($defaults as $text) $translator->setTranslation($domain, $text, $text);
 		$translator->setTranslation($domain, $defaults['fallback'], 'Translated module fallback & "review"');
+		$configFile = dirname($file) . '/Configuration.php';
+		$translator->setTranslation($translator->filenameToTextdomain($configFile), 'Preferred AgentTools model', 'Translated agent choice');
 		$language = new WireData();
 		$language->id = 42;
 		$language->addHook('isDefault', static function($event) { $event->return = false; });
@@ -390,6 +722,9 @@ class WireTest_FormBuilderProcessorGPTLive extends WireTest {
 		    $languages->addHook('getDefault', static function($event) use ($language) { $event->return = $language; });
 		    wire()->wire('languages', $languages);
 		    if($module->getVoiceMessages()['fallback'] !== 'Translated module fallback & "review"') throw new \RuntimeException('Module file translation was not used');
+		    $translatedFields = wire('modules')->get('InputfieldWrapper');
+		    $module->getConfigInputfields($translatedFields);
+		    $this->check('Moved configuration uses its scanned native domain', 'Translated agent choice', $translatedFields->getChildByName('agentId')->label);
 		    $form->set($module->className(), ['message_fallback' => 'Saved default override']);
 		    if($module->getVoiceMessages()['fallback'] !== 'Saved default override') throw new \RuntimeException('Default Action override lost');
 		    $form->set($module->className(), ['message_fallback' => 'Saved default override', 'message_fallback__lang42' => 'Saved language override']);
