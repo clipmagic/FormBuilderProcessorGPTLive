@@ -4,7 +4,7 @@ Adds GPT-Live voice input to a ProcessWire FormBuilder form. Spoken answers are
 prepared in supported visible fields; FormBuilder retains validation, saving,
 pagination and submission. Credentials remain on the server.
 
-This reference describes version **0.3.0**. See [HOWITWORKS.md](HOWITWORKS.md)
+This reference describes version **0.3.1**. See [HOWITWORKS.md](HOWITWORKS.md)
 for setup, controls markup and detailed Action settings, or [README.md](README.md)
 for the general overview.
 
@@ -213,9 +213,9 @@ persistence behaviour. The ordinary `set()` method is not a saved configuration 
 | Setting | Default | Purpose |
 |---------|---------|---------|
 | `agentId` | No selection | Stable AgentTools agent ID. |
-| `assistantSpeaksFirst` | On | Standard Checkbox. Missing setting defaults on; saved `0` disables. Requests one opening reply after a new session starts, not on Resume or page changes. |
+| `assistantSpeaksFirst` | On | Standard Checkbox. Missing setting defaults on; saved `0` disables. Requests one opening reply after a new session starts, not on Resume or page changes. When supported fields are present, the welcome briefly explains that visitors can answer on screen and say when they are done entering answers. |
 | `clarificationLimit` | `1` | Integer, 1–5. Maximum comprehension clarification/read-back questions per field before manual fallback. The initial question does not count. Invalid settings use 1. Applies to all fields; ordinary choice/date disambiguation does not count. Conversation policy interpreted by the agents, rather than a browser-enforced counter. |
-| `choiceNoticeThreshold` | `4` | Integer, 1–100. Before offering more than this many valid choices, explain that visitors can interrupt or select on screen at any time. Applies to single/multiple choices and dynamic widget options. Empty placeholders are excluded; equality does not trigger it. Invalid settings use 4. Reminder delivery is an agent instruction. |
+| `choiceNoticeThreshold` | `4` | Integer, 1–100. Before offering more than this many valid choices, explain that visitors can interrupt or select on screen at any time, and say when they are done choosing. Applies to single/multiple choices and dynamic widget options. Empty placeholders are excluded; equality does not trigger it. Invalid settings use 4. Reminder delivery is an agent instruction. |
 | `message_welcome` | Inherit | Spoken opening greeting; uses the same language/default/module inheritance as other visitor messages. Greeting wording is not instructions or submission permission. |
 | `voice` | `marin` | Supported built-in GPT-Live voice; unknown values fall back to Marin. Fixed at session startup. |
 | `accent` | Empty (automatic) | Language-specific regional preference, e.g. `en-AU` or `fr-FR`. Applies only when speaking that language; unknown values use automatic pronunciation. `custom` uses the two fields below. |
@@ -255,8 +255,16 @@ contains `requestTimeoutSeconds` and a base64 UTF-8 JSON `messageData` catalog.
 Form-local `data-gpt-live-*` attributes retain the same context across pagination.
 
 The bundled client reads these attributes and binds controls using the rendered
-form ID and script URL. No global public JavaScript API is exposed. Custom scripts
-must implement the contracts described in [HOWITWORKS.md](HOWITWORKS.md).
+form ID and script URL. A form may have multiple toggle buttons; give each button
+the same `data-gpt-live-for` value equal to that rendered form's HTML `id`. Keep
+one `data-gpt-live-transcript` and one `data-gpt-live-copy` control in a single
+controls block below the form, associated using
+`data-gpt-live-transcript-for="<form-id>"`. The transcript block does not need a
+toggle. A second toggle below the form is optional; any additional toggle uses
+the same form ID and synchronizes with the others. Buttons for another form use
+its own HTML ID and remain independent. Iframe documents bind only their own
+controls. No global public JavaScript API is exposed. Custom scripts must
+implement the contracts described in [HOWITWORKS.md](HOWITWORKS.md).
 
 The shared `/formbuilder-gpt-live/{formName}/` route is an internal browser
 integration endpoint, not a general-purpose public API. It requires POST JSON,

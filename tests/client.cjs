@@ -32,7 +32,7 @@ const startupStatus={textContent:''};
 const label={textContent:''};
 const button={getAttribute(){return 'example';},setAttribute(){},querySelector(selector){return selector==='[data-gpt-live-label]'?label:null;}};
 const startupControls={querySelector(selector){if(selector==='[data-gpt-live-toggle]')return button;if(selector==='[data-gpt-live-status]')return startupStatus;return null;},appendChild(){}};
-context.document.querySelectorAll=()=>[startupForm];
+context.document.querySelectorAll=(selector)=>selector.startsWith('[data-gpt-live-toggle]')?[]:[startupForm];
 context.document.createElement=()=>({setAttribute(){},remove(){}});
 context.Node={DOCUMENT_POSITION_FOLLOWING:4};
 let stopped=false;
@@ -85,6 +85,7 @@ const missingForm = {id:'missing', dataset:{gptLiveUnavailable:'1'}, compareDocu
 const missingControls = {dataset:{}, hidden:false, querySelector(){return {getAttribute(){return 'missing';}};}};
 const oldQuery = context.document.querySelectorAll;
 context.document.querySelectorAll = (selector) => {
+	if(selector.startsWith('[data-gpt-live-toggle]')) return [];
  assert.ok(selector.includes('form[data-gpt-live-unavailable]'));
  return [missingForm];
 };

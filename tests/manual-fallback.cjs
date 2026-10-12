@@ -20,7 +20,7 @@ assert.equal(sent.length, 0, 'Synthetic voice writes must not become manual corr
 change({ isTrusted: true, target: input });
 assert.equal(session.preparedPages[1], undefined);
 assert(sent.some(event => event.type === 'session.thinking.append' && event.content.includes('0444555666')));
-assert(sent.some(event => event.type === 'session.instructions.append' && event.content.includes('continue waiting')));
+assert(!sent.some(event => event.type === 'session.instructions.append'), 'Manual edits must not add repeated prompt instructions');
 assert(!sent.some(event => event.type === 'response.create'), 'Typing must not trigger speech');
 sent.length = 0;
 input.value = '044';
@@ -32,7 +32,7 @@ assert.equal(sent.length, 0);
 flush();
 assert(sent.some(event => event.type === 'session.thinking.append' && event.content.includes('0444444555')), 'Focused input must reach context without blur');
 const instructions = sent.filter(event => event.type === 'session.instructions.append').map(event => event.content).join('');
-assert(instructions.includes('without asking them to say, spell or confirm'));
+assert.equal(instructions, '', 'Debounced manual edits must only append current value context');
 sent.length = 0;
 change({ isTrusted: true, target: input });
 assert.equal(sent.length, 0, 'Blur must not duplicate the same manual value');

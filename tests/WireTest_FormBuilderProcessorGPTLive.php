@@ -129,7 +129,7 @@ class WireTest_FormBuilderProcessorGPTLive extends WireTest {
             foreach([1, 2, 1] as $page) {
                 $payload = (new \ReflectionMethod($action, 'buildSessionPayload'))->invoke($action, $form, $fields, [], [], $page, 2, $settings, 'fixture', 'fixture-model');
                 foreach([$payload['session']['instructions'], $payload['session']['delegation']['responses']['instructions']] as $policy) {
-                    foreach(['more than ' . $expected . ' available choices', 'before the first choice', 'dynamically returned widget suggestions', 'select it on screen yourself at any time', 'once for each choice question'] as $text) if(!str_contains($policy, $text)) throw new \RuntimeException('Long-list policy missing: ' . $text);
+                    foreach(['more than ' . $expected . ' available choices', 'before the first choice', 'dynamically returned widget suggestions', 'select it on screen yourself at any time', 'say when you are done choosing', 'once for each choice question'] as $text) if(!str_contains($policy, $text)) throw new \RuntimeException('Long-list policy missing: ' . $text);
                 }
             }
         }
@@ -379,10 +379,13 @@ class WireTest_FormBuilderProcessorGPTLive extends WireTest {
         $request = $build->invoke($action, $form, $fields, ['postcode' => 'Postcode'], $known, 1, 3, [], 'fixture-offer', 'fixture-model');
         $instructions = $request['session']['instructions'];
         $this->check('Rendered existing postcode reaches opening context', true, str_contains($instructions, '"value":"2570"'));
+        $this->check('Welcome explains manual entry and done cue', true, str_contains($instructions, 'enter answers on screen as well as speak, and should say they are done'));
         foreach(['Begin speaking without waiting', 'briefly summarise', 'already entered, not newly saved', 'Do not request a populated value again', 'Do not invent progress or values on later pages'] as $policy) {
             $this->check('Populated opening policy: ' . $policy, true, str_contains($instructions, $policy));
         }
         $this->check('Populated opening has no submission tool', 1, count($request['session']['delegation']['responses']['tools']));
+        $silentRequest = $build->invoke($action, $form, $fields, ['postcode' => 'Postcode'], [], 1, 3, ['assistantSpeaksFirst' => 0], 'fixture-offer', 'fixture-model');
+        $this->check('Manual-entry cue is limited to enabled welcome', false, str_contains($silentRequest['session']['instructions'], 'enter answers on screen as well as speak'));
     }
 
     private function testVoicePreferences() {

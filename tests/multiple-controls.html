@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GPT-Live multiple controls fixture</title>
+<link rel="stylesheet" href="../FormBuilderProcessorGPTLive.css">
+<style>
+	body { max-width: 56rem; margin: 2rem auto; padding: 0 1rem; font: 1rem/1.5 system-ui, sans-serif; color: #202428; }
+	form { display: grid; gap: 1.25rem; padding: 1.5rem; border: 1px solid #c8cdd2; border-radius: .25rem; }
+	label { display: grid; gap: .35rem; }
+	input, textarea { box-sizing: border-box; width: 100%; max-width: 100%; min-height: 2.75rem; padding: .6rem; font: inherit; }
+	textarea { min-height: 8rem; }
+	#result { padding: .75rem; background: #e9f5ec; }
+</style>
+<body>
+<main>
+	<h1>Multiple voice controls fixture</h1>
+	<p>No microphone, provider session, network request or form submission is started by this fixture.</p>
+	<section class="gpt-live-controls" data-gpt-live-controls aria-label="Voice controls above the form">
+		<button class="gpt-live-toggle" type="button" data-gpt-live-toggle data-gpt-live-for="FormBuilder_fixture">
+			<span class="gpt-live-toggle__icons" aria-hidden="true">
+				<svg data-gpt-live-play viewBox="0 0 16 16" width="16" height="16"><path fill="currentColor" d="M4 2.8v10.4L13 8 4 2.8z"/></svg>
+				<svg data-gpt-live-stop-icon viewBox="0 0 16 16" width="16" height="16" hidden><path fill="currentColor" d="M4.5 3h2.5v10H4.5zM9 3h2.5v10H9z"/></svg>
+			</span>
+			<span data-gpt-live-label>Start voice assistant</span>
+		</button>
+	</section>
+	<form class="FormBuilder" id="FormBuilder_fixture" data-gpt-live-session-url="/unused/" data-gpt-live-script-url="../FormBuilderProcessorGPTLive.js" data-gpt-live-messages='{"idle":"Start voice assistant","active":"Pause voice assistant"}'>
+		<h2>Fictional long enquiry form</h2>
+		<label>Your name<input name="name"></label>
+		<label>Email<input name="email" type="email"></label>
+		<label>What would you like help with?<textarea name="request"></textarea></label>
+	</form>
+	<section class="gpt-live-controls" data-gpt-live-controls data-gpt-live-transcript-for="FormBuilder_fixture" aria-label="Voice transcript below the form">
+		<p class="gpt-live-controls__status" data-gpt-live-status role="status"></p>
+		<div class="gpt-live-controls__transcript" data-gpt-live-transcript hidden></div>
+		<button class="gpt-live-controls__copy" type="button" data-gpt-live-copy aria-label="Copy conversation" title="Copy conversation" hidden>Copy</button>
+	</section>
+	<p id="result" role="status">Waiting for client initialization…</p>
+</main>
+<script src="../FormBuilderProcessorGPTLive.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+	const buttons = Array.from(document.querySelectorAll('[data-gpt-live-toggle]'));
+	const result = document.querySelector('#result');
+	const pass = buttons.length === 1
+		&& buttons.every(button => button.getAttribute('aria-pressed') === 'false' && !button.disabled && button.querySelector('[data-gpt-live-label]').textContent === 'Start voice assistant')
+		&& document.querySelectorAll('[data-gpt-live-transcript]').length === 1
+		&& document.querySelectorAll('[data-gpt-live-copy]').length === 1;
+	result.textContent = (pass ? 'PASS' : 'FAIL') + ': top toggle, one below-form transcript/copy region, responsive form layout; no voice session started.';
+});
+</script>
+</body>
+</html>

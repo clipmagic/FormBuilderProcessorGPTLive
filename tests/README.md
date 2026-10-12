@@ -5,12 +5,15 @@ normal operation, and WireTests is not a runtime dependency of the Action.
 
 ChoiceNotice covers the native Integer threshold (default 4), saved/invalid
 settings, strict greater-than comparison, placeholder exclusion, single/multiple
-choice counts and both-agent policies across pages. Spoken reminders and actual
-interruption behaviour require a voice acceptance test.
+choice counts, the “done choosing” cue, and both-agent policies across pages.
+Welcome coverage checks the manual-entry cue is present only for enabled
+speaker-first greetings. Spoken reminders and actual interruption behaviour
+require a voice acceptance test.
 
 Clarification coverage includes the native per-form Integer setting, invalid-value
 fallback, both-agent policy on successive pages, and `manual-fallback.cjs` for
-silent visitor edits, prior readiness revocation and synthetic/stale event guards.
+silent visitor edits that append value context without repeated instructions,
+prior readiness revocation and synthetic/stale event guards.
 Focused typing updates after a short pause, without waiting for blur; duplicate
 blur events and pending edits on a stale/navigating session are also checked.
 Spoken attempt counting/manual fallback still requires a real voice acceptance test.
@@ -67,7 +70,16 @@ node site/modules/FormBuilderProcessorGPTLive/tests/validation-feedback.cjs
 node site/modules/FormBuilderProcessorGPTLive/tests/context-appends.cjs
 node site/modules/FormBuilderProcessorGPTLive/tests/datetime.cjs
 node site/modules/FormBuilderProcessorGPTLive/tests/transcript.cjs
+node site/modules/FormBuilderProcessorGPTLive/tests/multiple-controls.cjs
+node site/modules/FormBuilderProcessorGPTLive/tests/manual-fallback.cjs
+node site/modules/FormBuilderProcessorGPTLive/tests/widget-preparation.cjs
 ```
+
+Open `tests/multiple-controls.html` on the local DDEV site for a rendered
+top-toggle and lower-transcript check. It reports whether the toggle initializes
+and only one transcript/copy target exists. Check at the normal viewport and a
+narrow width; the fixture does not request microphone access, contact a provider
+or submit its fictional form.
 
 These use simulated browser controls and connections, with no microphone or
 network session. Recovery checks include new-page response requests and silence
@@ -90,7 +102,11 @@ Context append checks cover the service limit, complete text/order preservation,
 Unicode, paused silence and closed/stale ownership guards.
 Transcript checks cover reserved output/copy state, literal text and speaker
 grouping, internal following versus earlier-history reading, complete-history
-copy and reset. Open `tests/transcript-layout.html` on a local development site
+copy and reset. Multiple-controls checks cover two toggles for one form, active,
+paused and busy synchronization, clicks through either toggle, a transcript-only
+block associated by form ID, a single transcript/copy target, separate forms and
+same-ID pagination replacement. Open
+`tests/transcript-layout.html` on a local development site
 for the native FormBuilder iframe-resize check: stream text at normal and narrow
 widths, then check the PASS result and keyboard scrolling. No voice/provider or
 enquiry request is started by that fixture.

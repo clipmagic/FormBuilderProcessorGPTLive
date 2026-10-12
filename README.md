@@ -43,18 +43,23 @@ write prompts, copy field definitions or configure a separate service for each f
 The assistant uses the questions, choices and conditions already in FormBuilder.
 Some specialised fields still need to be completed manually.
 
-The [installation and configuration guide](HOWITWORKS.md) covers the initial
-site setup and optional settings when you need them.
+The [installation and configuration guide](https://github.com/clipmagic/FormBuilderProcessorGPTLive/blob/master/HOWITWORKS.md) covers the initial site setup and optional settings when you need them.
 
 ## Visitors stay in control
 
 Visitors can use voice, type normally, or use both. They can pause and resume the
 assistant and copy the visible conversation.
 
+Long forms can place the voice toggle above the form and the transcript below.
+Developers can add an optional second toggle below the form; it shares the same
+session and state. See [the developer guide](https://github.com/clipmagic/FormBuilderProcessorGPTLive/blob/master/HOWITWORKS.md) for the markup contract and the short-form layout option.
+
 Answers appear as the conversation progresses. If the assistant has trouble
 understanding an answer, it offers a limited clarification attempt, then asks
-for manual entry. Before longer choice lists, it reminds visitors they can
-interrupt or choose on screen. Both limits are configurable for each form.
+for manual entry. The welcome explains that visitors can enter answers on screen
+and say when they are done. Before choice lists longer than the configured
+threshold, it reminds visitors they can interrupt or choose on screen, then say
+when they are done choosing.
 
 By default, visitors submit the form themselves. You can optionally let them ask
 the assistant to submit it. With that option enabled, the assistant asks them to
@@ -78,7 +83,7 @@ an individual form. The supplied wording works without editing it.
 
 ## Find out more
 
-- [How it works and Action settings](HOWITWORKS.md)
-- [Version history](CHANGELOG.md)
+- [How it works and Action settings](https://github.com/clipmagic/FormBuilderProcessorGPTLive/blob/master/HOWITWORKS.md)
+- [Version history](https://github.com/clipmagic/FormBuilderProcessorGPTLive/blob/master/CHANGELOG.md)
 
-Current version: **0.3.0**.
+Current version: **0.3.1**.

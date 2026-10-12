@@ -3,6 +3,19 @@
 User-facing module changes are grouped by the version in
 `FormBuilderProcessorGPTLive.info.php`. Dates identify release preparation and earlier local development.
 
+## Unreleased
+
+## 0.3.1 — 2026-10-12
+
+- Tell visitors during the welcome that they can answer on screen and say when
+  they are done. For choice lists above the configured threshold, include a
+  short “done choosing” cue. Manual field changes continue to update context
+  silently without appending repeated prompt instructions or triggering speech.
+- Support multiple form-associated voice toggles with synchronized labels, icons,
+  busy/pressed states and one shared transcript/copy target per form. Associate a
+  separate transcript-only block by form ID so the toggle can sit above a long
+  form and the conversation can remain below it.
+
 ## 0.3.0 — 2026-10-09
 
 - Add choiceNoticeThreshold (default 4, range 1–100). Before offering a longer

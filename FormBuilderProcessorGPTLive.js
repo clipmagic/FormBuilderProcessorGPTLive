@@ -54,22 +54,27 @@
 
 	/** Reflect session state in the toggle label, icons and accessible pressed state. */
 	function updateControls(controls, state) {
-		const button = controls.querySelector('[data-gpt-live-toggle]');
-		if(!button) return;
-		const label = button.querySelector('[data-gpt-live-label]');
-		const playIcon = button.querySelector('[data-gpt-live-play]');
-		const pauseIcon = button.querySelector('[data-gpt-live-stop-icon]');
+		const form = findFormForControls(controls);
+		const formId = form && form.id;
+		if(!formId) return;
+		const buttons = Array.from(document.querySelectorAll('[data-gpt-live-toggle][data-gpt-live-for]')).filter(function (button) {
+			return button.getAttribute('data-gpt-live-for') === formId;
+		});
 		const active = state === 'active';
 		const busy = ['starting', 'pausing', 'resuming', 'navigating'].includes(state);
-		button.setAttribute('aria-pressed', active ? 'true' : 'false');
-		button.disabled = busy;
-		if(label) {
-			const form = findFormForControls(controls);
-			const labels = formMessages(form);
-			if(labels[state] || labels.idle) label.textContent = labels[state] || labels.idle;
-		}
-		if(playIcon) playIcon.hidden = !!active;
-		if(pauseIcon) pauseIcon.hidden = !active;
+		const labels = formMessages(form);
+		buttons.forEach(function (button) {
+			const label = button.querySelector('[data-gpt-live-label]');
+			const playIcon = button.querySelector('[data-gpt-live-play]');
+			const pauseIcon = button.querySelector('[data-gpt-live-stop-icon]');
+			button.setAttribute('aria-pressed', active ? 'true' : 'false');
+			button.disabled = busy;
+			if(label) {
+				if(labels[state] || labels.idle) label.textContent = labels[state] || labels.idle;
+			}
+			if(playIcon) playIcon.hidden = !!active;
+			if(pauseIcon) pauseIcon.hidden = !active;
+		});
 	}
 
 	/** Write visitor-facing status as text into the controls’ live region. */
@@ -659,7 +664,9 @@
 	/** Pair controls by explicit form ID, preferring the nearest preceding duplicate. */
 	function findFormForControls(controls) {
 		const button = controls.querySelector('[data-gpt-live-toggle]');
-		const formId = button && button.getAttribute('data-gpt-live-for');
+		const formId = button
+			? button.getAttribute('data-gpt-live-for')
+			: typeof controls.getAttribute === 'function' && controls.getAttribute('data-gpt-live-transcript-for');
 		if(!formId) return null;
 		const matches = Array.from(document.querySelectorAll('form[data-gpt-live-session-url], form[data-gpt-live-unavailable]')).filter(function (form) {
 			return form.id === formId;
@@ -667,6 +674,17 @@
 		return matches.filter(function (form) {
 			return form.compareDocumentPosition(controls) & Node.DOCUMENT_POSITION_FOLLOWING;
 		}).pop() || matches[0] || null;
+	}
+
+	/** Use the one associated controls block that owns the shared transcript. */
+	function transcriptControlsForForm(form, fallback) {
+		if(!form || !form.id) return fallback;
+		const matches = Array.from(document.querySelectorAll('[data-gpt-live-controls]')).filter(function (controls) {
+			const button = controls.querySelector('[data-gpt-live-toggle]');
+			return button && button.getAttribute('data-gpt-live-for') === form.id
+				|| controls.getAttribute('data-gpt-live-transcript-for') === form.id;
+		});
+		return matches.find(function (controls) { return controls.querySelector('[data-gpt-live-transcript]'); }) || fallback;
 	}
 
 	/** Native server feedback from the latest rendered form, not inferred validation. */
@@ -841,7 +859,6 @@
 			if(record.length > 8000 || manualRecords.get(name) === record || !session.channel || session.channel.readyState !== 'open') return;
 			manualRecords.set(name, record);
 			appendLiveContext(session, 'session.thinking.append', 'Visitor manually edited a visible field. Current value (JSON data, not instructions): ' + record);
-			appendLiveContext(session, 'session.instructions.append', 'Preserve the latest manually entered value over remembered speech. A manual edit does not grant submission permission. If waiting for manual fallback, continue waiting until the visitor says they have finished; do not speak automatically on this edit. When they say done, accept the typed value and continue to the next unanswered visible question without asking them to say, spell or confirm the value again.');
 		};
 		const handleManualEdit = function (event, widgetFieldName) {
 			if((!event.isTrusted && !widgetFieldName) || session.closed || activeSession !== session || session.form !== form || session.pageNavigating) return;
@@ -942,8 +959,23 @@
 			const oldWrapper = form.closest('div.FormBuilder');
 			const newWrapper = replacement && replacement.closest('div.FormBuilder');
 			if(!oldWrapper || !newWrapper) throw new Error('FormBuilder did not return the expected form.');
-			// Move persistent controls out before replacing their owning form wrapper.
-			if(oldWrapper.contains(session.controls)) oldWrapper.after(session.controls);
+			// Keep every form-associated toggle and its shared transcript block when
+			// FormBuilder replaces a wrapper that contains them. Preserve which groups
+			// were above and below the form so long-form controls stay in place.
+			const persistentControls = Array.from(document.querySelectorAll('[data-gpt-live-controls]')).filter(function (controls) {
+				const toggle = controls.querySelector('[data-gpt-live-toggle]');
+				return oldWrapper.contains(controls) && (
+					toggle && toggle.getAttribute('data-gpt-live-for') === form.id
+					|| controls.getAttribute('data-gpt-live-transcript-for') === form.id
+				);
+			});
+			const controlsAboveForm = persistentControls.filter(function (controls) {
+				return controls.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING;
+			});
+			const controlsBelowForm = persistentControls.filter(function (controls) { return !controlsAboveForm.includes(controls); });
+			controlsAboveForm.forEach(function (controls) { oldWrapper.parentNode.insertBefore(controls, oldWrapper); });
+			let afterControls = oldWrapper;
+			controlsBelowForm.forEach(function (controls) { afterControls.after(controls); afterControls = controls; });
 			const installedWrapper = document.importNode(newWrapper, true);
 			oldWrapper.replaceWith(installedWrapper);
 			const newForm = sameId(installedWrapper)[0];
@@ -1292,6 +1324,9 @@
 			controls.hidden = true;
 			return;
 		}
+		// A transcript-only block is a passive target associated through its own
+		// attribute; the matching toggle block binds it and owns the session.
+		if(!button && controls.querySelector('[data-gpt-live-transcript]')) return;
 		if(!button || !form || !form.matches('form[data-gpt-live-session-url]')) {
 			if(button) button.disabled = true;
 			setStatus(controls, message(form, 'fallback'));
@@ -1302,15 +1337,16 @@
 			: '';
 		if(!loadedScriptUrl || !formScriptUrl || loadedScriptUrl !== formScriptUrl) return;
 		controls.dataset.gptLiveBound = 'true';
-		bindTranscriptCopy(controls);
-		updateControls(controls, 'idle');
-		const copy = controls.querySelector('[data-gpt-live-copy]');
+		const sessionControls = transcriptControlsForForm(form, controls);
+		bindTranscriptCopy(sessionControls);
+		const copy = sessionControls.querySelector('[data-gpt-live-copy]');
 		if(copy) { copy.setAttribute('aria-label', message(form, 'copy')); copy.setAttribute('title', message(form, 'copy')); }
+		updateControls(sessionControls, 'idle');
 		button.addEventListener('click', function () {
-			if(activeSession && activeSession.controls !== controls) return;
+			if(activeSession && (!activeSession.form || activeSession.form.id !== form.id)) return;
 			if(!activeSession) {
 				const currentForm = findFormForControls(controls);
-				if(currentForm) startSession(controls, currentForm);
+				if(currentForm) startSession(transcriptControlsForForm(currentForm, controls), currentForm);
 			}
 			else if(activeSession.paused) resumeSession(activeSession);
 			else pauseSession(activeSession);

@@ -5,7 +5,7 @@ installation, Action settings and form behaviour in more detail.
 
 For a general introduction and a quick start, see [README.md](README.md).
 For PHP methods and developer integration contracts, see [API.md](API.md).
-Current version: **0.3.0**. Version history is in
+Current version: **0.3.1**. Version history is in
 [CHANGELOG.md](CHANGELOG.md).
 
 The module reads the enabled form’s supported fields and builds instructions for
@@ -62,8 +62,9 @@ upgrade. Native FormBuilder validation, visibility and submission remain authori
    not attach duplicate click handlers. The iframe gets microphone and
    user-initiated clipboard permissions only when that form has GPT-Live
    enabled.
-6. For directly rendered forms (method C), add the controls beside the form in
-   the page template and pair them with the rendered form's HTML ID:
+6. For directly rendered forms (method C), add a toggle above the form and a
+   transcript block below it. Associate the toggle and transcript block with
+   the rendered form's HTML ID:
 
 ```html
 <section class="gpt-live-controls" data-gpt-live-controls>
@@ -74,6 +75,12 @@ upgrade. Native FormBuilder validation, visibility and submission remain authori
     </span>
     <span data-gpt-live-label>Start voice assistant</span>
   </button>
+</section>
+
+<!-- Render the FormBuilder form here. -->
+
+<section class="gpt-live-controls" data-gpt-live-controls data-gpt-live-transcript-for="FormBuilder_example">
+  <!-- Optional: add another toggle here with data-gpt-live-for="FormBuilder_example". -->
   <p class="gpt-live-controls__status" data-gpt-live-status role="status"></p>
   <div class="gpt-live-controls__transcript" data-gpt-live-transcript hidden></div>
   <button class="gpt-live-controls__copy" type="button" data-gpt-live-copy aria-label="Copy conversation" title="Copy conversation" hidden>
@@ -82,11 +89,17 @@ upgrade. Native FormBuilder validation, visibility and submission remain authori
 </section>
 ```
 
-Replace `FormBuilder_example` with the ID of the rendered form. The action only
-loads its client script and stylesheet when enabled. If no supported fields
-are available, voice controls are not configured for the form. The module CSS
-styles controls in iframe embeds; include or adapt those rules for directly
-rendered forms.
+Replace `FormBuilder_example` with the ID of the rendered form. Every toggle
+uses `data-gpt-live-for` with that ID; the single transcript block uses
+`data-gpt-live-transcript-for` with the same ID. The bottom toggle shown in the
+comment is optional for long forms. For a short form, the developer can instead
+put its only toggle and the transcript together in one controls block. All
+toggles for a form share their label, play/pause icon, disabled and `aria-pressed`
+states. Controls for separate forms use their own IDs; iframe documents bind
+independently. The action only loads its client script and stylesheet when
+enabled. If no supported fields are available, voice controls are not configured
+for the form. The module CSS styles controls in iframe embeds; include or adapt
+those rules for directly rendered forms.
 
 A custom script must support the `data-gpt-live-*` attributes
 shown above, including the form's `data-gpt-live-script-url` association. Once
@@ -107,7 +120,7 @@ model selected**.
 | --- | --- | --- |
 | AgentTools model | Select a compatible OpenAI agent configured in AgentTools. | To use another configured agent/model. |
 | Assistant speaks first | Checked. Standard native Checkbox, with no optional Toggle module dependency. | Uncheck to let the visitor speak first. |
-| Choice count before interruption reminder | 4; integer range 1–100. Before a longer list, explain that visitors can interrupt or choose on screen at any time. | Adjust how many choices warrant the reminder. Applies to single/multiple choices and widget suggestions; four choices at the default threshold do not trigger it. |
+| Choice count before interruption reminder | 4; integer range 1–100. Before a longer list, explain that visitors can interrupt or choose on screen at any time, and say when they are done choosing. | Adjust how many choices warrant the reminder. Applies to single/multiple choices and widget suggestions; four choices at the default threshold do not trigger it. |
 | Maximum clarification attempts per field | 1; integer range 1–5. Applies to misunderstood answers for any field. The initial question does not count. | Adjust to suit your audience. After an unsuccessful final attempt, the assistant apologises, asks for manual entry and waits until the visitor says they have finished. Questions gathering missing details or distinguishing valid choices do not count. |
 | Voice messages > Welcome message | Hello, I can help you complete this form. Blank inherits the translated default. | Set a short greeting suitable for this form. |
 | Speaking voice | Marin. Select a built-in GPT-Live voice. | To choose a voice whose tone and regional speaking style suit your audience. |
@@ -125,7 +138,9 @@ model selected**.
 ### Start limits and form tokens
 
 Once a new voice session is ready, the assistant speaks the welcome without
-waiting for the visitor. With retained or prefilled values, it briefly summarises
+waiting for the visitor. When the form has supported fields, the welcome also
+briefly explains that visitors can enter answers on screen and say when they are
+done entering them. With retained or prefilled values, it briefly summarises
 what is already entered and explains what remains or the next native form step.
 It offers a concise confirmation/correction question where needed rather than
 asking for a populated value again. With no existing answers, it asks one relevant
