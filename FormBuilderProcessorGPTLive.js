@@ -17,6 +17,33 @@
 		? new URL(document.currentScript.src, document.baseURI).href
 		: '';
 	let activeSession = null;
+	const diagnosticsEnabled = new URLSearchParams(window.location.search).get('gptLiveTrace') === '1';
+	function traceDiagnostic(event, detail) {
+		if(!diagnosticsEnabled) return;
+		if(!Array.isArray(window.__gptLiveTrace)) window.__gptLiveTrace = [];
+		window.__gptLiveTrace.push(Object.assign({ at: Date.now(), source: 'gpt-live', event: event }, detail || {}));
+		if(window.__gptLiveTrace.length > 100) window.__gptLiveTrace.splice(0, window.__gptLiveTrace.length - 100);
+		document.documentElement.setAttribute('data-gpt-live-trace', JSON.stringify(window.__gptLiveTrace));
+	}
+	function traceFormEvents(form) {
+		if(!diagnosticsEnabled || form.dataset.gptLiveTraceBound === 'true') return;
+		form.dataset.gptLiveTraceBound = 'true';
+		['input', 'change'].forEach(function (eventName) {
+			form.addEventListener(eventName, function (event) {
+				if(event.target && event.target.name) traceDiagnostic('field-event', { formId: form.id, field: event.target.name, type: eventName, nonEmpty: Boolean(event.target.value) });
+			}, true);
+		});
+		form.addEventListener('reset', function () { traceDiagnostic('form-reset', { formId: form.id }); }, true);
+	}
+	function traceFormValuePresence(form, fields, event) {
+		if(!diagnosticsEnabled || !form || !Array.isArray(fields)) return;
+		traceDiagnostic(event, {
+			formId: form.id,
+			fields: fields.filter(function (name) { return typeof name === 'string'; }).map(function (name) {
+				return { name: name, nonEmpty: currentFieldValues(form, name).some(function (value) { return hasAnswer(form, name, value); }) };
+			})
+		});
+	}
 
 	/** Read PHP-provided messages from the owning form; attributes survive page replacement. */
 	function formMessages(form) {
@@ -224,6 +251,14 @@
 		session.closed = true;
 		if(session.requests) session.requests.forEach(function (request) { request.abort(); });
 		if(session.submissionTimer) window.clearTimeout(session.submissionTimer);
+		if(session.submissionWatchdog) window.clearTimeout(session.submissionWatchdog);
+		if(session.acknowledgementTimer) window.clearTimeout(session.acknowledgementTimer);
+		if(session.submissionResultHandler) document.removeEventListener('gpt-live:submission-result', session.submissionResultHandler);
+		if(session.form && session.submissionRequestId && session.form.dataset.gptLiveSubmissionRequestId === session.submissionRequestId) {
+			delete session.form.dataset.gptLiveSubmissionRequestId;
+		}
+		session.submissionPending = false;
+		session.submissionRequestId = null;
 		if(session.updateWait) {
 			window.clearTimeout(session.updateWait.timer);
 			session.updateWait.reject(new Error('The voice session closed during the page change.'));
@@ -523,7 +558,9 @@
 				conditional.push(name);
 				return;
 			}
-			if(!setFieldValue(form, name, values[name])) unsupported.push(name);
+			const updated = setFieldValue(form, name, values[name]);
+			traceDiagnostic('field-write', { formId: form.id, field: name, accepted: updated, nonEmpty: hasAnswer(form, name, values[name]) });
+			if(!updated) unsupported.push(name);
 		});
 		for(let pass = 0; pass < fieldNames.length && conditional.length; pass++) {
 			let changed = false;
@@ -533,7 +570,9 @@
 					pending.push(name);
 					return;
 				}
-				if(!setFieldValue(form, name, values[name])) {
+				const updated = setFieldValue(form, name, values[name]);
+				traceDiagnostic('field-write', { formId: form.id, field: name, accepted: updated, nonEmpty: hasAnswer(form, name, values[name]) });
+				if(!updated) {
 					unsupported.push(name);
 					return;
 				}
@@ -596,8 +635,64 @@
 		};
 	}
 
-	/** Request native FormBuilder submission; this result is not a success receipt. */
-	function requestFormSubmission(session) {
+	/** End a successful voice session after the assistant has acknowledged the result. */
+	function endAfterSubmissionAcknowledgement(session) {
+		if(session.acknowledgementTimer) window.clearTimeout(session.acknowledgementTimer);
+		session.acknowledgementTimer = null;
+		cleanup(session);
+		session.controls.remove();
+	}
+
+	/** Clear the pending result listener and its bounded wait. */
+	function clearSubmissionWait(session) {
+		if(session.submissionTimer) window.clearTimeout(session.submissionTimer);
+		if(session.submissionWatchdog) window.clearTimeout(session.submissionWatchdog);
+		session.submissionTimer = null;
+		session.submissionWatchdog = null;
+		if(session.submissionResultHandler) document.removeEventListener('gpt-live:submission-result', session.submissionResultHandler);
+		session.submissionResultHandler = null;
+	}
+
+	/** Complete a submission reported by an asynchronous FormBuilder integration. */
+	function finishExternalSubmission(session, detail) {
+		if(session.closed || activeSession !== session || !session.submissionPending || !detail) return;
+		if(detail.formId !== session.submissionFormId || detail.actionUrl !== session.submissionActionUrl) return;
+		if(detail.requestId !== session.submissionRequestId) return;
+		const acceptedStatuses = ['submitted', 'validation_error', 'network_error', 'submission_unconfirmed'];
+		const status = acceptedStatuses.includes(detail.status) ? detail.status : 'submission_unconfirmed';
+		clearSubmissionWait(session);
+		session.submissionPending = false;
+		const callId = session.pendingSubmissionCallId;
+		session.pendingSubmissionCallId = null;
+		session.submissionRequestId = null;
+		const currentForm = document.getElementById(detail.formId);
+		if(currentForm) session.form = currentForm;
+		if(!callId) return;
+
+		if(status === 'submitted') {
+			session.acknowledgementTimer = window.setTimeout(function () {
+				if(!session.closed) endAfterSubmissionAcknowledgement(session);
+			}, 12000);
+			sendToolResult(session, callId, {
+				status: 'submitted',
+				instruction: 'The form integration confirmed that FormBuilder accepted the submission. Briefly acknowledge success. Do not infer or describe any other outcome.'
+			});
+			return;
+		}
+
+		const fields = Array.isArray(detail.fields)
+			? detail.fields.filter(function (field) { return typeof field === 'string'; }).slice(0, 12).map(function (field) { return field.slice(0, 100); })
+			: [];
+		setStatus(session.controls, status === 'validation_error' ? message(session.form, 'submissionFailed') : message(session.form, 'fallback'));
+		sendToolResult(session, callId, {
+			status: status,
+			fields: fields,
+			instruction: 'The form integration did not confirm a successful submission. Do not say it was submitted or retry unless the visitor directly asks again.'
+		});
+	}
+
+	/** Request FormBuilder submission; async integrations can report their final result. */
+	function requestFormSubmission(session, callId) {
 		// The caller checks the model-provided confirmation flag. There is currently
 		// no browser-owned confirmation record or prepared-value gate here.
 		const form = session.form;
@@ -625,29 +720,63 @@
 			return { status: 'validation_error', message: message(form, 'toolSubmissionInvalid') };
 		}
 		session.submissionPending = true;
+		session.pendingSubmissionCallId = callId;
+		session.submissionFormId = form.id;
+		session.submissionActionUrl = new URL(form.action || window.location.href, window.location.href).href;
+		session.submissionRequestId = crypto.randomUUID();
+		session.submissionResultHandler = function (event) { finishExternalSubmission(session, event.detail); };
+		document.addEventListener('gpt-live:submission-result', session.submissionResultHandler);
 		setStatus(session.controls, message(session.form, 'sending'));
+		session.submissionWatchdog = window.setTimeout(function () {
+			finishExternalSubmission(session, {
+				formId: session.submissionFormId,
+				actionUrl: session.submissionActionUrl,
+				requestId: session.submissionRequestId,
+				status: 'submission_unconfirmed'
+			});
+		}, 30000);
 		session.submissionTimer = window.setTimeout(function () {
 			session.submissionTimer = null;
-			if(session.closed || activeSession !== session || session.form !== form) return;
+			if(session.closed || activeSession !== session || !session.submissionPending || session.form !== form) return;
 			let submittedEvent = null;
 			const observe = function (event) { submittedEvent = event; };
+			const requestId = session.submissionRequestId;
 			form.addEventListener('submit', observe, true);
+			form.dataset.gptLiveSubmissionRequestId = requestId;
 			try {
 				form.requestSubmit(submitter);
-				// Native submit dispatch is synchronous. A cancelled event or fresh validation
-				// failure did not initiate native navigation. Never retry automatically.
-				if(!submittedEvent || submittedEvent.defaultPrevented) {
-					session.submissionPending = false;
-					setStatus(session.controls, message(session.form, 'submissionFailed'));
-				}
 			} catch(error) {
-				session.submissionPending = false;
-				setStatus(session.controls, message(session.form, 'submissionFailed'));
+				finishExternalSubmission(session, {
+					formId: session.submissionFormId,
+					actionUrl: session.submissionActionUrl,
+					requestId: session.submissionRequestId,
+					status: 'network_error'
+				});
 			} finally {
 				form.removeEventListener('submit', observe, true);
+				if(form.dataset.gptLiveSubmissionRequestId === requestId) delete form.dataset.gptLiveSubmissionRequestId;
+			}
+			if(!session.submissionPending) return;
+			if(!submittedEvent) {
+				finishExternalSubmission(session, {
+					formId: session.submissionFormId,
+					actionUrl: session.submissionActionUrl,
+					requestId: session.submissionRequestId,
+					status: 'validation_error'
+				});
+			} else if(!submittedEvent.defaultPrevented) {
+				clearSubmissionWait(session);
+				session.submissionPending = false;
+				const pendingCallId = session.pendingSubmissionCallId;
+				session.pendingSubmissionCallId = null;
+				session.submissionRequestId = null;
+				sendToolResult(session, pendingCallId, {
+					status: 'submission_requested',
+					message: message(form, 'toolSubmissionRequested')
+				});
 			}
 		}, 0);
-		return { status: 'submission_requested', message: message(form, 'toolSubmissionRequested') };
+		return { status: 'submission_pending', message: message(form, 'toolSubmissionRequested') };
 	}
 
 	/** Return a tool result over the data channel and request the next model response. */
@@ -1107,6 +1236,9 @@
 		} else if(event.type === 'response.event' && event.event && event.event.type === 'response.output_item.done') {
 			const item = event.event.item || {};
 			if(item.type !== 'function_call') return;
+			let traceArguments = {};
+			try { traceArguments = JSON.parse(item.arguments || '{}'); } catch(error) { traceArguments = {}; }
+			traceDiagnostic('tool-call', { toolName: item.name, fields: traceArguments && typeof traceArguments === 'object' ? Object.keys(traceArguments).filter(name => allowedFields(session.form).has(name)) : [] });
 			if(session.pageNavigating) {
 				// Navigation owns the next reply once current page context is installed.
 				sendToolResult(session, item.call_id, { status: 'page_changing', message: message(session.form, 'toolPageChanging') }, false);
@@ -1116,8 +1248,9 @@
 				let args = {};
 				try { args = JSON.parse(item.arguments || '{}'); } catch(error) { args = null; }
 				const result = args && args.visitor_requested_submission === true
-					? requestFormSubmission(session)
+					? requestFormSubmission(session, item.call_id)
 					: { status: 'submission_not_requested', message: message(session.form, 'toolSubmissionNotConfirmed') };
+				if(result.status === 'submission_pending') return;
 				sendToolResult(session, item.call_id, result);
 				return;
 			}
@@ -1127,6 +1260,8 @@
 				values = null;
 			}
 			prepareWithWidgets(session, values).then(function (result) {
+				traceFormValuePresence(session.form, Object.keys(values || {}), 'tool-result');
+				traceDiagnostic('tool-result-status', { status: result && result.status, fields: result && Array.isArray(result.fields) ? result.fields : [] });
 				if(result && !session.closed && activeSession === session) sendToolResult(session, item.call_id, result);
 			});
 		}
@@ -1147,6 +1282,7 @@
 		// preparedPages stores visible-value snapshots for guidance, not submit permission.
 		const session = { controls: controls, form: form, peer: null, channel: null, microphone: null, microphoneSender: null, remoteAudio: null, startTimer: null, ready: false, closed: false, cancelled: false, paused: false, transitioning: false, pageNavigating: false, updateWait: null, preparedPages: {}, submissionPending: false, stage: 'microphone', clientFailureReported: false };
 		activeSession = session;
+		traceDiagnostic('session-start', { formId: form.id });
 		updateControls(controls, 'starting');
 		setStatus(controls, message(session.form, 'requestingMicrophone'));
 		resetTranscript(controls);
@@ -1337,6 +1473,7 @@
 			: '';
 		if(!loadedScriptUrl || !formScriptUrl || loadedScriptUrl !== formScriptUrl) return;
 		controls.dataset.gptLiveBound = 'true';
+		traceFormEvents(form);
 		const sessionControls = transcriptControlsForForm(form, controls);
 		bindTranscriptCopy(sessionControls);
 		const copy = sessionControls.querySelector('[data-gpt-live-copy]');

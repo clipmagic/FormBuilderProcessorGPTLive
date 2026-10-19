@@ -32,6 +32,15 @@ class FormBuilderProcessorGPTLive extends FormBuilderProcessorAction {
 	private const TOOL_NAME_PREFIX = 'prepare_';
 	private const SUBMIT_TOOL_NAME_PREFIX = 'submit_';
 
+	/** Remove root trait files superseded by classes/ in version 0.3.0. */
+	public function ___upgrade($fromVersion, $toVersion) {
+		if(!$this->wire()->modules->versionCompare($fromVersion, '0.3.0', '<')) return;
+		foreach(['FormBuilderProcessorGPTLiveMessages.php', 'FormBuilderProcessorGPTLiveProtection.php'] as $filename) {
+			$path = __DIR__ . '/' . $filename;
+			if(is_file($path)) $this->wire()->files->unlink($path, __DIR__, true);
+		}
+	}
+
 	/** Register one ProcessWire URL hook for every FormBuilder GPT-Live form. */
 	public function init() {
 		$this->wire()->modules->addHookAfter('isUninstallable', $this, 'guardActionUninstall');

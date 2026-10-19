@@ -81,15 +81,16 @@ trait FormBuilderProcessorGPTLiveConfiguration {
 		if(!empty($settings['allowVisitorRequestedSubmission'])) $allowSubmission->attr('checked', 'checked');
 		$inputfields->add($allowSubmission);
 
-		/** @var InputfieldURL $scriptPath */
-		$scriptPath = $this->wire()->modules->get('InputfieldURL');
+		/** @var InputfieldTextarea $scriptPath */
+		$scriptPath = $this->wire()->modules->get('InputfieldTextarea');
 		$scriptPath->attr('name', 'jsURL');
-		$scriptPath->label = __('URL to JavaScript file that provides voice controls', __FILE__);
-		$scriptPath->description = __('Specify a URL/path relative to the root of the ProcessWire installation.', __FILE__);
+		$scriptPath->label = __('JavaScript files for voice controls', __FILE__);
+		$scriptPath->description = __('Enter one .js URL/path per line, relative to the ProcessWire installation root. The first line selects the GPT-Live client; later lines load after it in order.', __FILE__);
+		$scriptPath->attr('rows', 4);
 		$scriptPath->attr('value', trim((string) ($settings['jsURL'] ?? '')) ?: $this->defaultScriptPath());
 		$defaultScriptPath = $this->defaultScriptPath();
 		$defaultScriptUrl = $this->wire()->config->urls->root . ltrim($defaultScriptPath, '/');
-		$scriptPath->notes = __('Default value:', __FILE__) . " [$defaultScriptPath]($defaultScriptUrl)";
+		$scriptPath->notes = __('Default first line:', __FILE__) . " [$defaultScriptPath]($defaultScriptUrl). Add site-specific adapters on later lines.";
 		$inputfields->add($scriptPath);
 
 		$stylePath = $this->wire()->modules->get('InputfieldURL');

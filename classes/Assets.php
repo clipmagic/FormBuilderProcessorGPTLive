@@ -32,6 +32,26 @@ trait FormBuilderProcessorGPTLiveAssets {
 	private function configuredAssetUrl(string $setting, string $defaultPath): string {
 		$url = trim((string) ($this->currentSettings()[$setting] ?? ''));
 		if($url === '') $url = $defaultPath;
+		return $this->normalizeAssetUrl($url);
+	}
+
+	/** Resolve the ordered client/add-on JavaScript URLs, retaining old single-path settings. */
+	private function configuredScriptUrls(): array {
+		$saved = trim((string) ($this->currentSettings()['jsURL'] ?? ''));
+		$paths = $saved === '' ? [] : preg_split('/\R+/', $saved);
+		if(!$paths) $paths = [$this->defaultScriptPath()];
+		$urls = [];
+		foreach($paths as $path) {
+			$path = trim((string) $path);
+			if($path === '') continue;
+			$url = $this->normalizeAssetUrl($path);
+			if(!in_array($url, $urls, true)) $urls[] = $url;
+		}
+		return $urls ?: [$this->normalizeAssetUrl($this->defaultScriptPath())];
+	}
+
+	/** Resolve one root-relative/site-root URL and version a local file. */
+	private function normalizeAssetUrl(string $url): string {
 		$rootUrl = (string) $this->wire()->config->urls->root;
 		if(strlen($url) && strpos($url, '//') === false && strpos($url, $rootUrl) !== 0) {
 			$url = $rootUrl . ltrim($url, '/');
@@ -60,16 +80,24 @@ trait FormBuilderProcessorGPTLiveAssets {
 
 	/** Sanitize administrator-selected browser asset URLs. */
 	public function set($key, $value) {
-		if(in_array($key, ['jsURL', 'cssURL'], true) && strlen((string) $value)) {
-			$value = $this->wire()->sanitizer->url((string) $value);
-			$urlPath = parse_url($value, PHP_URL_PATH);
+		if(in_array($key, ['jsURL', 'cssURL'], true) && strlen(trim((string) $value))) {
 			$extension = $key === 'jsURL' ? '.js' : '.css';
-			if(!is_string($urlPath) || strtolower(substr($urlPath, -strlen($extension))) !== $extension) {
-				$this->error($key === 'jsURL'
-					? __('The voice controls script URL must point to a .js file.', __FILE__)
-					: __('The voice controls stylesheet URL must point to a .css file.', __FILE__));
-				return '';
+			$paths = $key === 'jsURL' ? preg_split('/\R+/', trim((string) $value)) : [(string) $value];
+			$cleanPaths = [];
+			foreach($paths as $path) {
+				$path = trim((string) $path);
+				if($path === '') continue;
+				$path = $this->wire()->sanitizer->url($path);
+				$urlPath = parse_url($path, PHP_URL_PATH);
+				if(!is_string($urlPath) || strtolower(substr($urlPath, -strlen($extension))) !== $extension) {
+					$this->error($key === 'jsURL'
+						? __('Each voice controls script URL must point to a .js file.', __FILE__)
+						: __('The voice controls stylesheet URL must point to a .css file.', __FILE__));
+					return '';
+				}
+				$cleanPaths[] = $path;
 			}
+			$value = implode("\n", $cleanPaths);
 		}
 		return parent::set($key, $value);
 	}

@@ -4,7 +4,7 @@ Adds GPT-Live voice input to a ProcessWire FormBuilder form. Spoken answers are
 prepared in supported visible fields; FormBuilder retains validation, saving,
 pagination and submission. Credentials remain on the server.
 
-This reference describes version **0.3.1**. See [HOWITWORKS.md](HOWITWORKS.md)
+This reference describes version **0.3.2**. See [HOWITWORKS.md](HOWITWORKS.md)
 for setup, controls markup and detailed Action settings, or [README.md](README.md)
 for the general overview.
 
@@ -221,7 +221,8 @@ persistence behaviour. The ordinary `set()` method is not a saved configuration 
 | `accent` | Empty (automatic) | Language-specific regional preference, e.g. `en-AU` or `fr-FR`. Applies only when speaking that language; unknown values use automatic pronunciation. `custom` uses the two fields below. |
 | `accentLanguage` / `accentRegion` | Empty | With `accent=custom`, any language name and regional accent name, capped at 100 characters each in the prompt. Blank/incomplete pairs retain automatic pronunciation. |
 | `allowVisitorRequestedSubmission` | Off | Allow submission after explicit visitor permission; available only on the final page. |
-| `jsURL` / `cssURL` | Bundled module assets | Custom browser script/style URLs. |
+| `jsURL` | Module JavaScript file on the first line | One `.js` path per line. The first selects the GPT-Live client; following paths load afterward as ordered integrations. |
+| `cssURL` | Bundled module stylesheet | A custom browser stylesheet URL/path. |
 | `visitorStartLimit` | `5` | Starts per browser session and form; `0` disables this limit. |
 | `ipStartLimit` | `20` | Starts per IP and form; `0` disables this limit. |
 | `startWindowMinutes` | `10` | Rolling limit window, 1–1440 minutes. |
@@ -265,6 +266,41 @@ the same form ID and synchronizes with the others. Buttons for another form use
 its own HTML ID and remain independent. Iframe documents bind only their own
 controls. No global public JavaScript API is exposed. Custom scripts must
 implement the contracts described in [HOWITWORKS.md](HOWITWORKS.md).
+
+### Asynchronous submission result event
+
+A trusted integration that intercepts the voice-requested native submit event
+and completes FormBuilder submission asynchronously may report the final result
+by dispatching a `gpt-live:submission-result` CustomEvent on `document`. The
+module listens only while a voice-requested submission is pending and accepts a
+result only when the rendered form ID, absolute action URL and request correlation ID match:
+
+```js
+document.dispatchEvent(new CustomEvent('gpt-live:submission-result', {
+  detail: {
+    formId: form.id,
+    actionUrl: new URL(form.action || window.location.href, window.location.href).href,
+    requestId: requestId,  // capture synchronously from the form's submit event
+    status: 'submitted', // submitted | validation_error | network_error | submission_unconfirmed
+    fields: []            // optional field names; never include visitor values
+  }
+}));
+```
+
+Dispatch the event after the asynchronous request has completed. The module
+temporarily sets `data-gpt-live-submission-request-id` on the form
+while it dispatches `requestSubmit()`. An asynchronous integration must capture
+that value synchronously from the submit event, keep it with its request and
+return it unchanged. This prevents a late response from an older request from
+completing a newer one. Use `submitted` only when FormBuilder's response confirms
+acceptance; use `validation_error` or `network_error` when the request fails, and
+`submission_unconfirmed` when the integration cannot determine the outcome. The
+module does not start a submission, grant permission, retry, or treat a cancelled
+native event as success. The integration remains responsible for FormBuilder processing,
+duplicate-submit protection and its ordinary human-operated submit control. If no
+matching result arrives within 30 seconds, GPT-Live reports the outcome as
+unconfirmed. For ordinary native navigation without an asynchronous result event,
+the module reports only `submission_requested`.
 
 The shared `/formbuilder-gpt-live/{formName}/` route is an internal browser
 integration endpoint, not a general-purpose public API. It requires POST JSON,

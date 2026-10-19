@@ -11,7 +11,7 @@ trait FormBuilderProcessorGPTLiveRendering {
 			$this->logSessionFailure($fbForm->name, 503, 'Saved AgentTools model is missing or incompatible; manual form only');
 			$form->attr('data-gpt-live-unavailable', '1');
 			// Site-owned controls may be outside the form. Load the client to hide them.
-			$this->wire()->config->scripts->add($this->configuredAssetUrl('jsURL', $this->defaultScriptPath()));
+			foreach($this->configuredScriptUrls() as $scriptUrl) $this->wire()->config->scripts->add($scriptUrl);
 			return;
 		}
 		$pageNum = max(1, (int) $this->processor()->maker()->getPageNumToRender());
@@ -55,13 +55,16 @@ trait FormBuilderProcessorGPTLiveRendering {
 		$form->attr('data-gpt-live-validation-errors', json_encode($this->nativeValidationErrors($form), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));
 
 		$config = $this->wire()->config;
-		$scriptUrl = $this->configuredAssetUrl('jsURL', $this->defaultScriptPath());
+		$scriptUrls = $this->configuredScriptUrls();
+		$scriptUrl = reset($scriptUrls);
 		$form->attr('data-gpt-live-script-url', $scriptUrl);
-		$hasScript = false;
-		foreach($config->scripts as $script) {
-			if($script === $scriptUrl) { $hasScript = true; break; }
+		foreach($scriptUrls as $scriptUrl) {
+			$hasScript = false;
+			foreach($config->scripts as $script) {
+				if($script === $scriptUrl) { $hasScript = true; break; }
+			}
+			if(!$hasScript) $config->scripts->add($scriptUrl);
 		}
-		if(!$hasScript) $config->scripts->add($scriptUrl);
 
 		$styleUrl = $this->configuredAssetUrl('cssURL', $this->defaultStylePath());
 		$hasStyle = false;

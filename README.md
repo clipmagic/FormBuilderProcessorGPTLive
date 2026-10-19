@@ -86,4 +86,4 @@ an individual form. The supplied wording works without editing it.
 - [How it works and Action settings](https://github.com/clipmagic/FormBuilderProcessorGPTLive/blob/master/HOWITWORKS.md)
 - [Version history](https://github.com/clipmagic/FormBuilderProcessorGPTLive/blob/master/CHANGELOG.md)
 
-Current version: **0.3.1**.
+Current version: **0.3.2**.

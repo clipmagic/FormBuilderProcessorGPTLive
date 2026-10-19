@@ -3,7 +3,19 @@
 User-facing module changes are grouped by the version in
 `FormBuilderProcessorGPTLive.info.php`. Dates identify release preparation and earlier local development.
 
-## Unreleased
+## 0.3.2 — 2026-10-19
+
+- Automatically remove the obsolete root Messages and Protection trait files,
+  if present, when upgrading from a version below 0.3.0. Keep their replacements
+  in `classes/`; upgrades from 0.3.0 or later skip this cleanup.
+- Allow ordered JavaScript assets in the Action settings: the first line selects
+  the GPT-Live client and following lines load site integrations after it.
+- Add a generic `gpt-live:submission-result` event for trusted asynchronous form
+  integrations. GPT-Live waits for a matching form/action result before reporting
+  confirmed success and falls back to an unconfirmed outcome after 30 seconds.
+- Include opt-in `?gptLiveTrace=1` browser diagnostics for session starts, field
+  events and tool-result status. Tracing records field names/value presence,
+  without recording the visitor's field values.
 
 ## 0.3.1 — 2026-10-12
 

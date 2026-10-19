@@ -5,7 +5,7 @@ installation, Action settings and form behaviour in more detail.
 
 For a general introduction and a quick start, see [README.md](README.md).
 For PHP methods and developer integration contracts, see [API.md](API.md).
-Current version: **0.3.1**. Version history is in
+Current version: **0.3.2**. Version history is in
 [CHANGELOG.md](CHANGELOG.md).
 
 The module reads the enabled form’s supported fields and builds instructions for
@@ -25,18 +25,25 @@ do not block uninstall; their saved Action settings are not removed automaticall
 
 ## Set up a form
 
-### Upgrading to 0.3.0
+### Upgrading to 0.3.2
 
 Replace the complete module directory, including `classes/`, the browser script
-and stylesheet. Remove the obsolete root `FormBuilderProcessorGPTLiveMessages.php`
-and `FormBuilderProcessorGPTLiveProtection.php` files. Refresh ProcessWire's
-Modules list and reload the browser before starting a new voice session. Existing
+and stylesheet. Refresh ProcessWire's Modules list: when upgrading from a version
+below 0.3.0, the module's upgrade hook removes any existing obsolete root
+`FormBuilderProcessorGPTLiveMessages.php` and `FormBuilderProcessorGPTLiveProtection.php`
+files. The replacements in `classes/` are retained. Reload the browser before
+starting a new voice session. Existing
 Action settings are retained; missing clarification and choice-reminder settings
 inherit defaults of 1 and 4. Native translations for moved PHP files need a
 rescan and transfer to the new source domains as described below.
 
 Keep form-specific business rules in site hooks; they are not part of the module
 upgrade. Native FormBuilder validation, visibility and submission remain authoritative.
+
+Version 0.3.2 retains existing single-script settings. The JavaScript setting now
+accepts one path per line: keep the GPT-Live client first and add site adapters
+after it. Asynchronous submission integrations can report their confirmed result
+using `gpt-live:submission-result`; see [API.md](API.md) for the correlation contract.
 
 ### Initial setup
 
@@ -47,9 +54,10 @@ upgrade. Native FormBuilder validation, visibility and submission remain authori
    configuration.
 3. Open the form in FormBuilder, enable **FormBuilder GPT-Live**, choose the
    preferred AgentTools model on the **Actions** tab and save the form. The
-   action provides editable URL/path settings for the browser script and voice
-   controls stylesheet. The module's `.js` and `.css` files are used unless you
-   change those paths.
+   action provides an ordered JavaScript list and a separate voice-controls
+   stylesheet path. The first JavaScript line selects the client (the module's
+   `.js` file by default); any later lines load site-specific adapters after it.
+   Leave later lines empty when the module client is sufficient.
 4. The action displays the shared GPT-Live endpoint for this form. It reads the
    saved action settings and current form fields each time a voice session
    starts; no per-form endpoint file or copied field schema is needed.
@@ -126,7 +134,7 @@ model selected**.
 | Speaking voice | Marin. Select a built-in GPT-Live voice. | To choose a voice whose tone and regional speaking style suit your audience. |
 | Preferred regional accent | Automatic pronunciation for the spoken language. | Select a preset or Custom for any language and regional accent. |
 | Allow visitors to ask GPT-Live to submit this form | Off. Visitors normally submit the form themselves. | Enable if visitors should be able to confirm submission by voice after review. |
-| Browser script URL/path | The module’s JavaScript file. | For a custom client implementation. |
+| JavaScript files for voice controls | One module client path by default. | Keep the client on line one; add site-specific adapter scripts on following lines, loaded in order. A custom client on line one replaces the module client. |
 | Voice controls stylesheet URL/path | The module’s CSS file. | For a custom stylesheet. |
 | Maximum starts per visitor session | 5 starts per form. | To adjust the allowance for one browser session; 0 disables this limit. |
 | Maximum starts per IP address | 20 starts per form. | To adjust the shared-network backstop; 0 disables this limit. |
@@ -459,14 +467,17 @@ Failures reuse the existing Action messages; form values and transcript stay
 available. Aborting a browser request does not undo processing already performed
 by FormBuilder or the voice service on the server.
 
-When a native submission event is cancelled, fresh browser validation stops it,
-or `requestSubmit` throws, the assistant releases its pending-submission guard.
-It does not retry automatically.
+When fresh browser validation stops submission or `requestSubmit` throws, GPT-Live
+reports failure and does not retry. Ordinary native submission reports only that
+submission was requested; this is not a success receipt.
 
-Accepted native submissions retain the guard
-against another voice submission while FormBuilder processes them. A custom
-handler that cancels native submission and sends it through AJAX must own its
-own in-flight/duplicate protection; cancellation is not a success receipt.
+A custom integration may intercept the native submit and finish asynchronously.
+It can report the matching FormBuilder result with the generic
+`gpt-live:submission-result` document event described in [API.md](API.md). GPT-Live
+waits up to 30 seconds for that result, checks the form ID and action URL, and
+reports success only when the integration confirms it. Without a matching result,
+the outcome is unconfirmed. The custom integration still owns duplicate-submit
+protection, normal FormBuilder processing and the human-operated submit control.
 
 ### Missing model selection
 
